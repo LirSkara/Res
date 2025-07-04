@@ -4,11 +4,16 @@ QRes OS 4 - Order Models
 """
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from decimal import Decimal
 import enum
 
 from ..database import Base
+
+if TYPE_CHECKING:
+    from .table import Table
+    from .user import User
+    from .dish import Dish
 
 
 class OrderStatus(str, enum.Enum):

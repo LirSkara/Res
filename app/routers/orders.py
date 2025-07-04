@@ -82,7 +82,7 @@ async def get_orders(
     return OrderList(orders=orders, total=total)
 
 
-@router.post("/", response_model=OrderWithDetails)
+@router.post("/", response_model=OrderWithDetails, status_code=status.HTTP_201_CREATED)
 async def create_order(
     order_data: OrderCreate,
     db: DatabaseSession,
@@ -91,133 +91,169 @@ async def create_order(
     """
     Создать новый заказ (для официантов и администраторов)
     """
-    # Проверяем существование столика
-    table_query = select(Table).where(Table.id == order_data.table_id)
-    table_result = await db.execute(table_query)
-    table = table_result.scalar_one_or_none()
-    
-    if not table:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Столик не найден"
-        )
-    
-    if not table.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Столик неактивен"
-        )
-    
-    # Проверяем, нет ли уже активного заказа для столика
-    existing_order_query = select(Order).where(
-        Order.table_id == order_data.table_id,
-        Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
-    )
-    existing_order_result = await db.execute(existing_order_query)
-    existing_order = existing_order_result.scalar_one_or_none()
-    
-    if existing_order:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"У столика {table.number} уже есть активный заказ #{existing_order.id}"
-        )
-    
-    # Проверяем блюда и рассчитываем общую стоимость
-    total_price = Decimal('0.00')
-    validated_items = []
-    
-    for item_data in order_data.items:
-        dish_query = select(Dish).where(Dish.id == item_data.dish_id)
-        dish_result = await db.execute(dish_query)
-        dish = dish_result.scalar_one_or_none()
+    try:
+        # Проверяем существование столика
+        table_query = select(Table).where(Table.id == order_data.table_id)
+        table_result = await db.execute(table_query)
+        table = table_result.scalar_one_or_none()
         
-        if not dish:
+        if not table:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Блюдо с ID {item_data.dish_id} не найдено"
+                detail="Столик не найден"
             )
         
-        if not dish.is_available:
+        if not table.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Блюдо '{dish.name}' недоступно"
+                detail="Столик неактивен"
             )
         
-        item_total = dish.price * item_data.quantity
-        total_price += item_total
-        
-        validated_items.append({
-            'dish': dish,
-            'quantity': item_data.quantity,
-            'price': dish.price,
-            'total': item_total,
-            'comment': item_data.comment
-        })
-    
-    # Создаем заказ
-    new_order = Order(
-        table_id=order_data.table_id,
-        waiter_id=waiter_user.id,
-        order_type=order_data.order_type,
-        notes=order_data.notes,
-        kitchen_notes=order_data.kitchen_notes,
-        total_price=total_price,
-        status=OrderStatus.PENDING,
-        payment_status=PaymentStatus.UNPAID
-    )
-    
-    db.add(new_order)
-    await db.commit()
-    await db.refresh(new_order)
-    
-    # Создаем позиции заказа
-    order_items = []
-    for item_data in validated_items:
-        order_item = OrderItem(
-            order_id=new_order.id,
-            dish_id=item_data['dish'].id,
-            quantity=item_data['quantity'],
-            price=item_data['price'],
-            total=item_data['total'],
-            comment=item_data['comment'],
-            status=OrderItemStatus.NEW
+        # Проверяем, нет ли уже активного заказа для столика
+        existing_order_query = select(Order).where(
+            Order.table_id == order_data.table_id,
+            Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
         )
-        db.add(order_item)
-        order_items.append(order_item)
-    
-    # Обновляем статус столика и привязываем заказ
-    table.is_occupied = True
-    table.current_order_id = new_order.id
-    
-    await db.commit()
-    
-    # Загружаем заказ с полной информацией
-    full_order_query = select(Order).options(
-        selectinload(Order.table),
-        selectinload(Order.waiter),
-        selectinload(Order.items).selectinload(OrderItem.dish)
-    ).where(Order.id == new_order.id)
-    
-    full_order_result = await db.execute(full_order_query)
-    full_order = full_order_result.scalar_one()
-    
-    # Формируем ответ с детальной информацией
-    order_response = OrderWithDetails(
-        **full_order.__dict__,
-        table_number=full_order.table.number,
-        waiter_name=full_order.waiter.full_name,
-        items=[
-            OrderItemWithDish(
-                **item.__dict__,
-                dish_name=item.dish.name,
-                dish_image_url=item.dish.image_url,
-                dish_cooking_time=item.dish.cooking_time
+        existing_order_result = await db.execute(existing_order_query)
+        existing_order = existing_order_result.scalar_one_or_none()
+        
+        if existing_order:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"У столика {table.number} уже есть активный заказ #{existing_order.id}"
             )
-            for item in full_order.items
-        ]
-    )
-    
-    return order_response
+        
+        # Проверяем блюда и рассчитываем общую стоимость
+        total_price = Decimal('0.00')
+        validated_items = []
+        
+        for item_data in order_data.items:
+            dish_query = select(Dish).where(Dish.id == item_data.dish_id)
+            dish_result = await db.execute(dish_query)
+            dish = dish_result.scalar_one_or_none()
+            
+            if not dish:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Блюдо с ID {item_data.dish_id} не найдено"
+                )
+            
+            if not dish.is_available:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Блюдо '{dish.name}' недоступно"
+                )
+            
+            item_total = Decimal(str(dish.price)) * item_data.quantity
+            total_price += item_total
+            
+            validated_items.append({
+                'dish': dish,
+                'quantity': item_data.quantity,
+                'price': Decimal(str(dish.price)),
+                'total': item_total,
+                'comment': getattr(item_data, 'comment', None)
+            })
+        
+        # Создаем заказ
+        new_order = Order(
+            table_id=order_data.table_id,
+            waiter_id=waiter_user.id,
+            order_type=order_data.order_type,
+            notes=getattr(order_data, 'notes', None),
+            kitchen_notes=getattr(order_data, 'kitchen_notes', None),
+            total_price=total_price,
+            status=OrderStatus.PENDING,
+            payment_status=PaymentStatus.UNPAID
+        )
+        
+        db.add(new_order)
+        await db.commit()
+        await db.refresh(new_order)
+        
+        # Создаем позиции заказа
+        order_items = []
+        for item_data in validated_items:
+            order_item = OrderItem(
+                order_id=new_order.id,
+                dish_id=item_data['dish'].id,
+                quantity=item_data['quantity'],
+                price=item_data['price'],
+                total=item_data['total'],
+                comment=item_data.get('comment'),
+                status=OrderItemStatus.NEW
+            )
+            db.add(order_item)
+            order_items.append(order_item)
+        
+        # Обновляем статус столика и привязываем заказ
+        table.is_occupied = True
+        table.current_order_id = new_order.id
+        
+        await db.commit()
+        
+        # Загружаем заказ с полной информацией
+        full_order_query = select(Order).options(
+            selectinload(Order.table),
+            selectinload(Order.waiter),
+            selectinload(Order.items).selectinload(OrderItem.dish)
+        ).where(Order.id == new_order.id)
+        
+        full_order_result = await db.execute(full_order_query)
+        full_order = full_order_result.scalar_one()
+        
+        # Формируем ответ с детальной информацией
+        order_response = OrderWithDetails(
+            id=full_order.id,
+            table_id=full_order.table_id,
+            waiter_id=full_order.waiter_id,
+            order_type=full_order.order_type,
+            notes=full_order.notes,
+            kitchen_notes=full_order.kitchen_notes,
+            status=full_order.status,
+            payment_status=full_order.payment_status,
+            total_price=full_order.total_price,
+            served_at=full_order.served_at,
+            cancelled_at=full_order.cancelled_at,
+            time_to_serve=full_order.time_to_serve,
+            created_at=full_order.created_at,
+            updated_at=full_order.updated_at,
+            table_number=full_order.table.number,
+            waiter_name=full_order.waiter.full_name,
+            items=[
+                OrderItemWithDish(
+                    id=item.id,
+                    dish_id=item.dish_id,
+                    order_id=item.order_id,
+                    quantity=item.quantity,
+                    price=item.price,
+                    total=item.total,
+                    comment=item.comment,
+                    status=item.status,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    dish_name=item.dish.name,
+                    dish_image_url=item.dish.image_url,
+                    dish_cooking_time=item.dish.cooking_time
+                )
+                for item in full_order.items
+            ]
+        )
+        
+        return order_response
+        
+    except HTTPException:
+        # Перебрасываем HTTP исключения как есть
+        raise
+    except Exception as e:
+        # Логируем неожиданные ошибки
+        print(f"Error creating order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка создания заказа: {str(e)}"
+        )
 
 
 @router.get("/{order_id}", response_model=OrderWithDetails)
