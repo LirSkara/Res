@@ -4,9 +4,12 @@ QRes OS 4 - Category Model
 """
 from sqlalchemy import String, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 from ..database import Base
+
+if TYPE_CHECKING:
+    from .dish import Dish
 
 
 class Category(Base):

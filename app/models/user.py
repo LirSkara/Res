@@ -4,10 +4,13 @@ QRes OS 4 - User Model
 """
 from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 import enum
 
 from ..database import Base
+
+if TYPE_CHECKING:
+    from .order import Order
 
 
 class UserRole(str, enum.Enum):

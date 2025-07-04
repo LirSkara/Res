@@ -4,10 +4,14 @@ QRes OS 4 - Table Model
 """
 from sqlalchemy import String, Boolean, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 import uuid
 
 from ..database import Base
+
+if TYPE_CHECKING:
+    from .location import Location
+    from .order import Order
 
 
 class Table(Base):
