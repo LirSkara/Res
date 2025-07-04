@@ -1,0 +1,53 @@
+"""
+QRes OS 4 - Dish Model
+Модель блюда
+"""
+from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional, List
+from decimal import Decimal
+
+from ..database import Base
+
+
+class Dish(Base):
+    """Модель блюда"""
+    
+    __tablename__ = "dishes"
+    
+    # Основные поля
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    
+    # Цена и наличие
+    price: Mapped[Decimal] = mapped_column(Float(precision=2), nullable=False)
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Связи
+    category_id: Mapped[int] = mapped_column(
+        Integer, 
+        ForeignKey("categories.id"), 
+        nullable=False
+    )
+    
+    # Дополнительная информация
+    image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cooking_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
+    weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # граммы
+    calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # ккал
+    ingredients: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Relationships
+    category_obj: Mapped["Category"] = relationship(
+        "Category", 
+        back_populates="dishes"
+    )
+    order_items: Mapped[List["OrderItem"]] = relationship(
+        "OrderItem", 
+        back_populates="dish"
+    )
+    
+    def __repr__(self) -> str:
+        return f"<Dish(id={self.id}, name='{self.name}', price={self.price})>"
