@@ -18,7 +18,7 @@ from .schemas import ErrorResponse, HealthCheck
 # Импорт роутеров
 from .routers import (
     auth, users, tables, locations, categories, dishes, 
-    orders, ingredients, paymentmethod, websocket
+    orders, order_items, ingredients, paymentmethod, websocket
 )
 
 
@@ -135,6 +135,7 @@ app.include_router(locations.router, prefix="/locations", tags=["Locations"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(dishes.router, prefix="/dishes", tags=["Dishes"])
 app.include_router(orders.router, prefix="/orders", tags=["Orders"])
+app.include_router(order_items.router, prefix="/orders", tags=["Order Items"])
 app.include_router(ingredients.router, prefix="/ingredients", tags=["Ingredients"])
 app.include_router(paymentmethod.router, prefix="/payment-methods", tags=["Payment Methods"])
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])

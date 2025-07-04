@@ -11,7 +11,8 @@ from .category import Category
 from .dish import Dish
 from .ingredient import Ingredient
 from .paymentmethod import PaymentMethod
-from .order import Order, OrderItem, OrderStatus, PaymentStatus, OrderType, OrderItemStatus
+from .order import Order, OrderStatus, PaymentStatus, OrderType
+from .order_item import OrderItem, OrderItemStatus
 
 # Экспортируем все модели
 __all__ = [

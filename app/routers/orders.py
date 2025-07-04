@@ -12,7 +12,8 @@ from decimal import Decimal
 
 from ..deps import DatabaseSession, WaiterUser, KitchenUser, CurrentUser
 from ..models import Order, OrderItem, Table, Dish, User
-from ..models.order import OrderStatus, PaymentStatus, OrderItemStatus
+from ..models.order import OrderStatus, PaymentStatus, OrderType
+from ..models.order_item import OrderItemStatus
 from ..schemas import (
     Order as OrderSchema, OrderCreate, OrderUpdate, OrderWithDetails,
     OrderItem as OrderItemSchema, OrderItemCreate, OrderItemUpdate, 

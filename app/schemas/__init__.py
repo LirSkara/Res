@@ -34,9 +34,14 @@ from .dish import (
 # Order schemas
 from .order import (
     Order, OrderCreate, OrderUpdate, OrderWithDetails,
-    OrderItem, OrderItemCreate, OrderItemUpdate, OrderItemWithDish,
     OrderStatusUpdate, OrderPaymentUpdate, OrderList, OrderStats,
     OrderWebSocketMessage
+)
+
+# Order Item schemas  
+from .order_item import (
+    OrderItem, OrderItemCreate, OrderItemUpdate, OrderItemWithDish,
+    OrderItemStatusUpdate
 )
 
 # Misc schemas

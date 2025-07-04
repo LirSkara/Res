@@ -10,6 +10,7 @@ from . import locations
 from . import categories
 from . import dishes
 from . import orders
+from . import order_items
 from . import ingredients
 from . import paymentmethod
 from . import websocket
