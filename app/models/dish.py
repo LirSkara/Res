@@ -12,6 +12,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .category import Category
     from .order_item import OrderItem
+    from .dish_variation import DishVariation
 
 
 class Dish(Base):
@@ -25,9 +26,13 @@ class Dish(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     
-    # Цена и наличие
-    price: Mapped[Decimal] = mapped_column(Float(precision=2), nullable=False)
+    # Изображения и наличие
+    main_image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Дополнительные поля согласно ТЗ
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_popular: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Связи
     category_id: Mapped[int] = mapped_column(
@@ -37,7 +42,7 @@ class Dish(Base):
     )
     
     # Дополнительная информация
-    image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    main_image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Переименовано согласно ТЗ
     cooking_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # граммы
     calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # ккал
@@ -47,6 +52,11 @@ class Dish(Base):
     category_obj: Mapped["Category"] = relationship(
         "Category", 
         back_populates="dishes"
+    )
+    variations: Mapped[List["DishVariation"]] = relationship(
+        "DishVariation", 
+        back_populates="dish",
+        cascade="all, delete-orphan"
     )
     order_items: Mapped[List["OrderItem"]] = relationship(
         "OrderItem", 

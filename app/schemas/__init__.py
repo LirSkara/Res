@@ -31,6 +31,12 @@ from .dish import (
     DishAvailabilityUpdate, DishList, MenuResponse
 )
 
+# Dish Variation schemas  
+from .dish_variation import (
+    DishVariation, DishVariationCreate, DishVariationUpdate, DishVariationWithDish,
+    DishVariationList, DishVariationAvailabilityUpdate, DishVariationDefaultUpdate
+)
+
 # Order schemas
 from .order import (
     Order, OrderCreate, OrderUpdate, OrderWithDetails,

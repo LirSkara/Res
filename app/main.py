@@ -18,7 +18,8 @@ from .schemas import ErrorResponse, HealthCheck
 # Импорт роутеров
 from .routers import (
     auth, users, tables, locations, categories, dishes, 
-    orders, order_items, ingredients, paymentmethod, websocket
+    orders, order_items, ingredients, 
+    paymentmethod, websocket
 )
 
 

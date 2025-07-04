@@ -13,6 +13,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .order import Order
     from .dish import Dish
+    from .dish_variation import DishVariation
 
 
 class OrderItemStatus(str, enum.Enum):
@@ -53,6 +54,11 @@ class OrderItem(Base):
         ForeignKey("dishes.id"), 
         nullable=False
     )
+    dish_variation_id: Mapped[Optional[int]] = mapped_column(
+        Integer, 
+        ForeignKey("dish_variations.id"), 
+        nullable=True
+    )
     
     # Комментарии
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -64,6 +70,10 @@ class OrderItem(Base):
     )
     dish: Mapped["Dish"] = relationship(
         "Dish", 
+        back_populates="order_items"
+    )
+    dish_variation: Mapped[Optional["DishVariation"]] = relationship(
+        "DishVariation", 
         back_populates="order_items"
     )
     

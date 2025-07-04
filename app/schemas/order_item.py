@@ -12,6 +12,7 @@ from ..models.order_item import OrderItemStatus
 class OrderItemBase(BaseModel):
     """Базовая схема позиции заказа"""
     dish_id: int = Field(..., gt=0)
+    dish_variation_id: Optional[int] = Field(None, gt=0)
     quantity: int = Field(..., gt=0, le=50)
     comment: Optional[str] = Field(None, max_length=500)
 
@@ -23,6 +24,7 @@ class OrderItemCreate(OrderItemBase):
 
 class OrderItemUpdate(BaseModel):
     """Схема обновления позиции заказа"""
+    dish_variation_id: Optional[int] = Field(None, gt=0)
     quantity: Optional[int] = Field(None, gt=0, le=50)
     comment: Optional[str] = Field(None, max_length=500)
     status: Optional[OrderItemStatus] = None

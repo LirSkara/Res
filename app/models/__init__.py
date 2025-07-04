@@ -9,6 +9,7 @@ from .location import Location
 from .table import Table
 from .category import Category
 from .dish import Dish
+from .dish_variation import DishVariation
 from .ingredient import Ingredient
 from .paymentmethod import PaymentMethod
 from .order import Order, OrderStatus, PaymentStatus, OrderType
@@ -22,6 +23,7 @@ __all__ = [
     "Table",
     "Category",
     "Dish",
+    "DishVariation",
     "Ingredient",
     "PaymentMethod",
     "Order",
