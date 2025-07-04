@@ -162,7 +162,7 @@ async def update_location(
             )
     
     # Обновляем поля
-    update_data = location_data.dict(exclude_unset=True)
+    update_data = location_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(location, field, value)
     

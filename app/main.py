@@ -75,7 +75,7 @@ async def http_exception_handler(request, exc):
         content=ErrorResponse(
             message=str(exc.detail),
             error_code=f"HTTP_{exc.status_code}"
-        ).dict()
+        ).model_dump()
     )
 
 
@@ -88,7 +88,7 @@ async def validation_exception_handler(request, exc):
             message="Ошибка валидации данных",
             error_code="VALIDATION_ERROR",
             details={"errors": exc.errors()}
-        ).dict()
+        ).model_dump()
     )
 
 
@@ -100,7 +100,7 @@ async def general_exception_handler(request, exc):
         content=ErrorResponse(
             message="Внутренняя ошибка сервера",
             error_code="INTERNAL_SERVER_ERROR"
-        ).dict()
+        ).model_dump()
     )
 
 

@@ -156,7 +156,7 @@ async def update_ingredient(
             )
     
     # Обновляем поля
-    update_data = ingredient_data.dict(exclude_unset=True)
+    update_data = ingredient_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(ingredient, field, value)
     

@@ -173,7 +173,7 @@ async def update_category(
             )
     
     # Обновляем поля
-    update_data = category_data.dict(exclude_unset=True)
+    update_data = category_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(category, field, value)
     

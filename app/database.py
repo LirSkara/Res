@@ -63,6 +63,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     """Инициализация базы данных - создание всех таблиц"""
+    # Импортируем все модели, чтобы SQLAlchemy знал о них
+    from .models import (
+        User, Location, Table, Category, Dish, DishVariation,
+        Ingredient, PaymentMethod, Order, OrderItem
+    )
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

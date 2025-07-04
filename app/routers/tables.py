@@ -183,7 +183,7 @@ async def update_table(
             )
     
     # Обновляем поля
-    update_data = table_data.dict(exclude_unset=True)
+    update_data = table_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(table, field, value)
     

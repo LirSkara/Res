@@ -306,7 +306,7 @@ async def update_dish(
             )
     
     # Обновляем поля
-    update_data = dish_data.dict(exclude_unset=True)
+    update_data = dish_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(dish, field, value)
     

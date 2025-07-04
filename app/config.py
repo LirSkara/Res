@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Настройки приложения с валидацией"""
     
     # Database
-    database_url: str = "sqlite+aiosqlite:///./qres_os4.db"
+    database_url: str = "sqlite+aiosqlite:///./app.db"
     
     # Security
     secret_key: str = "your-super-secret-key-change-in-production"

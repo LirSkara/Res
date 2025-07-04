@@ -385,18 +385,21 @@ async def comprehensive_api_test():
                 new_dish_data = {
                     "name": f"Тестовое блюдо {int(time.time())}",
                     "description": "Описание тестового блюда",
-                    "price": 299.99,
                     "category_id": created_ids['category'],
                     "is_available": True,
                     "cooking_time": 15,
                     "calories": 350,
-                    "weight": 250
+                    "weight": 250.0,
+                    "main_image_url": "https://example.com/dish.jpg",
+                    "sort_order": 1,
+                    "is_popular": False,
+                    "code": f"DISH_{int(time.time())}"
                 }
                 response = await client.post(f"{BASE_URL}/dishes/", json=new_dish_data, headers=auth_headers)
                 if response.status_code in [200, 201]:  # Принимаем и 200 и 201
                     created_dish = response.json()
                     created_ids['dish'] = created_dish['id']
-                    results.add_test("Создание блюда", True, f"dish_id={created_dish['id']}, price={created_dish['price']} (код: {response.status_code})")
+                    results.add_test("Создание блюда", True, f"dish_id={created_dish['id']} (код: {response.status_code})")
                 else:
                     results.add_test("Создание блюда", False, f"Код ответа: {response.status_code}, ответ: {response.text}")
             except Exception as e:
@@ -413,6 +416,127 @@ async def comprehensive_api_test():
         except Exception as e:
             results.add_test("Публичное меню", False, f"Ошибка: {str(e)}")
         
+        # 7.5. ТЕСТИРОВАНИЕ ВАРИАЦИЙ БЛЮД
+        print("\n🍽️ 7.5. ТЕСТИРОВАНИЕ ВАРИАЦИЙ БЛЮД")
+        print("-" * 40)
+        
+        dish_variation_id = None
+        
+        if created_ids['dish']:
+            # Получение списка вариаций блюда
+            try:
+                response = await client.get(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/", headers=auth_headers)
+                if response.status_code == 200:
+                    variations_data = response.json()
+                    results.add_test("Список вариаций блюда", True, f"Всего: {variations_data['total']}")
+                else:
+                    results.add_test("Список вариаций блюда", False, f"Код ответа: {response.status_code}")
+            except Exception as e:
+                results.add_test("Список вариаций блюда", False, f"Ошибка: {str(e)}")
+            
+            # Создание новой вариации блюда
+            try:
+                new_variation_data = {
+                    "name": f"Большая порция {int(time.time())}",
+                    "description": "Увеличенная порция блюда",
+                    "price": 399.99,
+                    "weight": 350.0,
+                    "calories": 450,
+                    "is_default": True,
+                    "is_available": True,
+                    "sort_order": 1,
+                    "sku": f"VAR_{int(time.time())}"
+                }
+                response = await client.post(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/", json=new_variation_data, headers=auth_headers)
+                if response.status_code == 201:
+                    created_variation = response.json()
+                    dish_variation_id = created_variation['id']
+                    results.add_test("Создание вариации блюда", True, f"variation_id={created_variation['id']}, price={created_variation['price']}")
+                else:
+                    results.add_test("Создание вариации блюда", False, f"Код ответа: {response.status_code}, ответ: {response.text}")
+            except Exception as e:
+                results.add_test("Создание вариации блюда", False, f"Ошибка: {str(e)}")
+            
+            # Получение вариации по ID
+            if dish_variation_id:
+                try:
+                    response = await client.get(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{dish_variation_id}", headers=auth_headers)
+                    if response.status_code == 200:
+                        variation = response.json()
+                        results.add_test("Получение вариации по ID", True, f"variation_id={variation['id']}, name={variation['name']}")
+                    else:
+                        results.add_test("Получение вариации по ID", False, f"Код ответа: {response.status_code}")
+                except Exception as e:
+                    results.add_test("Получение вариации по ID", False, f"Ошибка: {str(e)}")
+                
+                # Обновление вариации
+                try:
+                    update_variation_data = {
+                        "price": 449.99,
+                        "description": "Обновленное описание вариации"
+                    }
+                    response = await client.patch(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{dish_variation_id}", json=update_variation_data, headers=auth_headers)
+                    if response.status_code == 200:
+                        updated_variation = response.json()
+                        results.add_test("Обновление вариации", True, f"new_price={updated_variation['price']}")
+                    else:
+                        results.add_test("Обновление вариации", False, f"Код ответа: {response.status_code}")
+                except Exception as e:
+                    results.add_test("Обновление вариации", False, f"Ошибка: {str(e)}")
+                
+                # Изменение доступности вариации
+                try:
+                    availability_data = {"is_available": False}
+                    response = await client.patch(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{dish_variation_id}/availability", json=availability_data, headers=auth_headers)
+                    if response.status_code == 200:
+                        availability_response = response.json()
+                        results.add_test("Изменение доступности вариации", True, f"message: {availability_response.get('message', 'OK')}")
+                    else:
+                        results.add_test("Изменение доступности вариации", False, f"Код ответа: {response.status_code}")
+                except Exception as e:
+                    results.add_test("Изменение доступности вариации", False, f"Ошибка: {str(e)}")
+        
+        # Создание второй вариации для тестирования удаления
+        second_variation_id = None
+        if created_ids['dish']:
+            try:
+                second_variation_data = {
+                    "name": f"Маленькая порция {int(time.time())}",
+                    "description": "Уменьшенная порция блюда",
+                    "price": 199.99,
+                    "weight": 150.0,
+                    "calories": 200,
+                    "is_default": False,
+                    "is_available": True,
+                    "sort_order": 2,
+                    "sku": f"VAR_SMALL_{int(time.time())}"
+                }
+                response = await client.post(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/", json=second_variation_data, headers=auth_headers)
+                if response.status_code == 201:
+                    second_variation = response.json()
+                    second_variation_id = second_variation['id']
+                    results.add_test("Создание второй вариации", True, f"variation_id={second_variation['id']}")
+                else:
+                    results.add_test("Создание второй вариации", False, f"Код ответа: {response.status_code}")
+            except Exception as e:
+                results.add_test("Создание второй вариации", False, f"Ошибка: {str(e)}")
+        
+        # Получение списка вариаций с фильтром (только доступные)
+        if created_ids['dish']:
+            try:
+                response = await client.get(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/?available_only=true", headers=auth_headers)
+                if response.status_code == 200:
+                    filtered_variations = response.json()
+                    results.add_test("Фильтр доступных вариаций", True, f"Доступных: {filtered_variations['total']}")
+                else:
+                    results.add_test("Фильтр доступных вариаций", False, f"Код ответа: {response.status_code}")
+            except Exception as e:
+                results.add_test("Фильтр доступных вариаций", False, f"Ошибка: {str(e)}")
+        
+        # Обновляем created_ids для очистки
+        created_ids['dish_variation'] = dish_variation_id
+        created_ids['second_dish_variation'] = second_variation_id
+
         # 8. ТЕСТИРОВАНИЕ ИНГРЕДИЕНТОВ
         print("\n🥕 8. ТЕСТИРОВАНИЕ ИНГРЕДИЕНТОВ")
         print("-" * 40)
@@ -479,13 +603,14 @@ async def comprehensive_api_test():
             results.add_test("Список заказов", False, f"Ошибка: {str(e)}")
         
         # Создание нового заказа
-        if created_ids['table'] and created_ids['dish']:
+        if created_ids['table'] and created_ids['dish'] and created_ids.get('dish_variation'):
             try:
                 new_order_data = {
                     "table_id": created_ids['table'],
                     "items": [
                         {
                             "dish_id": created_ids['dish'],
+                            "dish_variation_id": created_ids['dish_variation'],
                             "quantity": 2,
                             "comment": "Без соли"  # Исправляем поле на comment
                         }
@@ -506,6 +631,76 @@ async def comprehensive_api_test():
         print("\n⚠️ 11. ТЕСТИРОВАНИЕ ОШИБОК И ГРАНИЧНЫХ СЛУЧАЕВ")
         print("-" * 40)
         
+        # Тест удаления единственной вариации блюда (должен завершиться ошибкой)
+        if created_ids['dish'] and created_ids.get('dish_variation') and created_ids.get('second_dish_variation'):
+            try:
+                # Сначала удаляем вторую вариацию
+                response = await client.delete(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{created_ids['second_dish_variation']}", headers=auth_headers)
+                if response.status_code == 200:
+                    # Теперь пытаемся удалить последнюю вариацию (должен быть отказ)
+                    response = await client.delete(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{created_ids['dish_variation']}", headers=auth_headers)
+                    if response.status_code == 400:
+                        results.add_test("Защита от удаления единственной вариации", True, "Возвращает 400 как ожидается")
+                    else:
+                        results.add_test("Защита от удаления единственной вариации", False, f"Код ответа: {response.status_code}")
+                    # Восстанавливаем вариацию для корректной очистки
+                    created_ids['second_dish_variation'] = None
+                else:
+                    results.add_test("Удаление второй вариации для теста", False, f"Код ответа: {response.status_code}")
+            except Exception as e:
+                results.add_test("Защита от удаления единственной вариации", False, f"Ошибка: {str(e)}")
+        
+        # Тест создания вариации с дублирующимся SKU
+        if created_ids['dish'] and created_ids.get('dish_variation'):
+            try:
+                duplicate_sku_data = {
+                    "name": "Дублирующая вариация",
+                    "description": "Тест дублирования SKU",
+                    "price": 299.99,
+                    "sku": f"VAR_{int(time.time())}_ORIG",  # Используем тот же SKU
+                    "is_default": False,
+                    "is_available": True,
+                    "sort_order": 3
+                }
+                # Сначала создаем вариацию с уникальным SKU
+                response1 = await client.post(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/", json=duplicate_sku_data, headers=auth_headers)
+                if response1.status_code == 201:
+                    temp_variation = response1.json()
+                    # Теперь пытаемся создать вариацию с тем же SKU
+                    response2 = await client.post(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/", json=duplicate_sku_data, headers=auth_headers)
+                    if response2.status_code == 400:
+                        results.add_test("Защита от дублирования SKU", True, "Возвращает 400 для дублирующего SKU")
+                    else:
+                        results.add_test("Защита от дублирования SKU", False, f"Код ответа: {response2.status_code}")
+                    
+                    # Удаляем временную вариацию
+                    await client.delete(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/{temp_variation['id']}", headers=auth_headers)
+                else:
+                    results.add_test("Защита от дублирования SKU", False, f"Не удалось создать первую вариацию: {response1.status_code}")
+            except Exception as e:
+                results.add_test("Защита от дублирования SKU", False, f"Ошибка: {str(e)}")
+        
+        # Тест получения несуществующей вариации
+        if created_ids['dish']:
+            try:
+                response = await client.get(f"{BASE_URL}/dishes/{created_ids['dish']}/variations/99999", headers=auth_headers)
+                if response.status_code == 404:
+                    results.add_test("Несуществующая вариация", True, "Возвращает 404")
+                else:
+                    results.add_test("Несуществующая вариация", False, f"Код ответа: {response.status_code}")
+            except Exception as e:
+                results.add_test("Несуществующая вариация", False, f"Ошибка: {str(e)}")
+        
+        # Тест вариации для несуществующего блюда
+        try:
+            response = await client.get(f"{BASE_URL}/dishes/99999/variations/", headers=auth_headers)
+            if response.status_code == 404:
+                results.add_test("Вариации несуществующего блюда", True, "Возвращает 404")
+            else:
+                results.add_test("Вариации несуществующего блюда", False, f"Код ответа: {response.status_code}")
+        except Exception as e:
+            results.add_test("Вариации несуществующего блюда", False, f"Ошибка: {str(e)}")
+
         # Несуществующий эндпоинт
         try:
             response = await client.get(f"{BASE_URL}/nonexistent")
@@ -557,7 +752,7 @@ async def comprehensive_api_test():
         print("-" * 40)
         
         # Удаляем созданные данные в обратном порядке
-        cleanup_order = ['order', 'dish', 'ingredient', 'table', 'category', 'location', 'user']
+        cleanup_order = ['order', 'second_dish_variation', 'dish_variation', 'dish', 'ingredient', 'table', 'category', 'location', 'user']
         
         for resource_type in cleanup_order:
             resource_id = created_ids.get(resource_type)
@@ -568,6 +763,8 @@ async def comprehensive_api_test():
                         'location': 'locations', 
                         'category': 'categories',
                         'dish': 'dishes',
+                        'dish_variation': f'dishes/{created_ids.get("dish")}/variations',
+                        'second_dish_variation': f'dishes/{created_ids.get("dish")}/variations',
                         'ingredient': 'ingredients',
                         'table': 'tables',
                         'order': 'orders'

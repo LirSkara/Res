@@ -160,7 +160,7 @@ async def update_payment_method(
             )
     
     # Обновляем поля
-    update_data = payment_method_data.dict(exclude_unset=True)
+    update_data = payment_method_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(payment_method, field, value)
     
