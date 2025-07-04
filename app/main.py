@@ -51,13 +51,14 @@ app = FastAPI(
 start_time = time.time()
 
 
-# Middleware
+# CORS Middleware - настроен для разработки фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"],  # Разрешаем все origins для разработки
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # GET, POST, PUT, DELETE, OPTIONS, etc.
+    allow_headers=["*"],  # Authorization, Content-Type, etc.
+    expose_headers=["*"]  # Разрешаем доступ ко всем заголовкам ответа
 )
 
 app.add_middleware(

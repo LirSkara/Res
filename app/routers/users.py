@@ -14,10 +14,55 @@ from ..schemas import (
     UserList, APIResponse
 )
 from ..services.auth import AuthService
-from ..deps import AdminUser, DatabaseSession
+from ..deps import AdminUser, DatabaseSession, CurrentUser
 
 
 router = APIRouter()
+
+
+@router.get("/waiters", response_model=UserList)
+async def get_waiters(
+    db: DatabaseSession,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    is_active: Optional[bool] = Query(True),
+    search: Optional[str] = None
+):
+    """
+    Получение списка официантов
+    Доступно для неавторизованных пользователей (для выбора официанта при входе)
+    """
+    query = select(User).where(User.role == UserRole.WAITER)
+    
+    # Фильтры
+    conditions = [User.role == UserRole.WAITER]
+    
+    if is_active is not None:
+        conditions.append(User.is_active == is_active)
+    
+    if search:
+        search_term = f"%{search}%"
+        conditions.append(
+            User.username.ilike(search_term) | 
+            User.full_name.ilike(search_term)
+        )
+    
+    query = query.where(and_(*conditions))
+    
+    # Подсчет общего количества
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # Получение официантов с пагинацией
+    query = query.offset(skip).limit(limit).order_by(User.full_name.asc())
+    result = await db.execute(query)
+    waiters = result.scalars().all()
+    
+    return UserList(
+        users=[UserSchema.model_validate(waiter) for waiter in waiters],
+        total=total
+    )
 
 
 @router.get("/", response_model=UserList)

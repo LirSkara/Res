@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     debug: bool = True
     reload: bool = True
     
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    # CORS - Разрешаем все origins для разработки
+    cors_origins: List[str] = ["*"]
     
     # QR Code
     qr_base_url: str = "http://192.168.1.100:8000/menu"
