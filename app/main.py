@@ -16,11 +16,10 @@ from .database import init_db, close_db
 from .schemas import ErrorResponse, HealthCheck
 
 # Импорт роутеров
-from .routers import auth, users, tables, locations, categories, dishes
-# Остальные роутеры будут добавлены позже
-# from .routers import (
-#     orders, ingredients, paymentmethod, websocket
-# )
+from .routers import (
+    auth, users, tables, locations, categories, dishes, 
+    orders, ingredients, paymentmethod, websocket
+)
 
 
 @asynccontextmanager
@@ -135,11 +134,10 @@ app.include_router(tables.router, prefix="/tables", tags=["Tables"])
 app.include_router(locations.router, prefix="/locations", tags=["Locations"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(dishes.router, prefix="/dishes", tags=["Dishes"])
-# Остальные роутеры будут добавлены позже
-# app.include_router(orders.router, prefix="/orders", tags=["Orders"])
-# app.include_router(ingredients.router, prefix="/ingredients", tags=["Ingredients"])
-# app.include_router(paymentmethod.router, prefix="/payment-methods", tags=["Payment Methods"])
-# app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
+app.include_router(orders.router, prefix="/orders", tags=["Orders"])
+app.include_router(ingredients.router, prefix="/ingredients", tags=["Ingredients"])
+app.include_router(paymentmethod.router, prefix="/payment-methods", tags=["Payment Methods"])
+app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 
 
 if __name__ == "__main__":

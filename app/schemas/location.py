@@ -11,7 +11,7 @@ class LocationBase(BaseModel):
     """Базовая схема локации"""
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=255)
-    color: Optional[str] = Field(None, regex=r'^#[0-9A-Fa-f]{6}$')  # HEX color
+    color: Optional[str] = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')  # HEX color
     is_active: bool = True
 
 
@@ -24,7 +24,7 @@ class LocationUpdate(BaseModel):
     """Схема обновления локации"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=255)
-    color: Optional[str] = Field(None, regex=r'^#[0-9A-Fa-f]{6}$')
+    color: Optional[str] = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
     is_active: Optional[bool] = None
 
 

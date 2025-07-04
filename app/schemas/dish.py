@@ -12,7 +12,7 @@ class DishBase(BaseModel):
     """Базовая схема блюда"""
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(..., min_length=1)
-    price: Decimal = Field(..., gt=0, decimal_places=2)
+    price: Decimal = Field(..., gt=0)
     category_id: int = Field(..., gt=0)
     code: Optional[str] = Field(None, max_length=50)
     image_url: Optional[str] = Field(None, max_length=255)
@@ -32,7 +32,7 @@ class DishUpdate(BaseModel):
     """Схема обновления блюда"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, min_length=1)
-    price: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    price: Optional[Decimal] = Field(None, gt=0)
     category_id: Optional[int] = Field(None, gt=0)
     code: Optional[str] = Field(None, max_length=50)
     image_url: Optional[str] = Field(None, max_length=255)

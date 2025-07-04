@@ -9,6 +9,10 @@ from . import tables
 from . import locations
 from . import categories
 from . import dishes
+from . import orders
+from . import ingredients
+from . import paymentmethod
+from . import websocket
 
 __all__ = [
     "auth",
@@ -17,4 +21,8 @@ __all__ = [
     "locations", 
     "categories",
     "dishes",
+    "orders",
+    "ingredients",
+    "paymentmethod",
+    "websocket",
 ]
