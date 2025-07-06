@@ -81,10 +81,13 @@ start_time = time.time()
 
 
 # CORS Middleware - настроен для разработки фронтенда
+if settings.debug:
+    print(f"🚀 Настройка CORS для origins: {settings.cors_origins}")
+    print(f"🔧 Debug режим: {settings.debug}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,  # Используем настройки из конфига
-    # allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Ограничиваем методы
     allow_headers=["*"],  # Authorization, Content-Type, etc.
@@ -220,6 +223,27 @@ async def health_check():
         database="connected",
         uptime=round(uptime, 2)
     )
+
+
+@app.get("/debug/cors", tags=["Debug"])
+async def debug_cors(request: Request):
+    """Отладочный эндпоинт для проверки CORS настроек"""
+    origin = request.headers.get("origin", "Не указан")
+    
+    return {
+        "message": "CORS Debug Information",
+        "configured_origins": settings.cors_origins,
+        "request_origin": origin,
+        "origin_allowed": origin in settings.cors_origins,
+        "cors_config": {
+            "allow_credentials": True,
+            "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["*"],
+            "expose_headers": ["*"]
+        },
+        "environment": settings.environment,
+        "debug": settings.debug
+    }
 
 
 # Подключение роутеров

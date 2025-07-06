@@ -46,7 +46,9 @@ class Settings(BaseSettings):
         "http://localhost:5173", 
         "http://127.0.0.1:5173", 
         "http://localhost:3000", 
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080"
     ]
     
     # QR Code
@@ -66,12 +68,35 @@ class Settings(BaseSettings):
     restaurant_name: str = "QRes OS 4 Restaurant"
     restaurant_timezone: str = "Europe/Moscow"
     
-    @validator('cors_origins', pre=True)
-    def assemble_cors_origins(cls, v):
-        """Парсинг CORS origins из строки"""
+    @validator('cors_origins', pre=True, allow_reuse=True)
+    def parse_cors_origins(cls, v) -> List[str]:
+        """Парсинг CORS origins из переменной окружения или списка"""
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+            # Удаляем возможные JSON скобки и кавычки
+            v = v.strip().strip('[]"\'')
+            if not v:  # Если строка пустая, возвращаем значения по умолчанию
+                return [
+                    "http://localhost:5173", 
+                    "http://127.0.0.1:5173", 
+                    "http://localhost:3000", 
+                    "http://127.0.0.1:3000",
+                    "http://localhost:8080",
+                    "http://127.0.0.1:8080"
+                ]
+            origins = [origin.strip().strip('"\'') for origin in v.split(",")]
+            # Фильтруем пустые строки
+            origins = [origin for origin in origins if origin]
+            if os.getenv("DEBUG", "false").lower() == "true":
+                print(f"🔧 CORS Origins загружены из строки: {origins}")
+            return origins
+        elif isinstance(v, list):
+            if os.getenv("DEBUG", "false").lower() == "true":
+                print(f"🔧 CORS Origins загружены как список: {v}")
+            return v
+        else:
+            if os.getenv("DEBUG", "false").lower() == "true":
+                print(f"⚠️ Неожиданный тип CORS Origins: {type(v)}, значение: {v}")
+            return [str(v)] if v else []
     
     @validator('upload_dir')
     def create_upload_dir(cls, v):
