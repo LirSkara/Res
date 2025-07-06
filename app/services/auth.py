@@ -2,6 +2,7 @@
 QRes OS 4 - Authentication Service
 Сервис аутентификации и авторизации
 """
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from jose import JWTError, jwt
@@ -33,8 +34,8 @@ class AuthService:
         return pwd_context.hash(password)
     
     @staticmethod
-    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-        """Создание JWT токена"""
+    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, fresh: bool = False) -> str:
+        """Создание JWT токена с улучшенной безопасностью"""
         to_encode = data.copy()
         
         if expires_delta:
@@ -46,28 +47,54 @@ class AuthService:
         to_encode.update({
             "exp": expire,
             "iat": datetime.utcnow(),  # Время выдачи токена
-            "iss": "qres-os-4"  # Издатель токена
+            "iss": settings.jwt_issuer,  # Издатель токена
+            "aud": settings.jwt_audience,  # Аудитория токена
+            "fresh": fresh,  # Флаг "свежести" токена для критичных операций
+            "jti": secrets.token_hex(16)  # Уникальный ID токена для отзыва
         })
         encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
         return encoded_jwt
     
     @staticmethod
-    def verify_token(token: str) -> TokenData:
-        """Проверка и декодирование JWT токена"""
+    def verify_token(token: str, require_fresh: bool = False) -> TokenData:
+        """Проверка и декодирование JWT токена с улучшенной безопасностью"""
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Не удалось проверить учетные данные",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
+        fresh_token_required_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется свежий токен для этой операции",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
         try:
-            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+            payload = jwt.decode(
+                token, 
+                settings.secret_key, 
+                algorithms=[settings.algorithm],
+                audience=settings.jwt_audience,
+                issuer=settings.jwt_issuer
+            )
+            
             username: str = payload.get("sub")
             user_id: int = payload.get("user_id")
             role: str = payload.get("role")
+            issued_at: int = payload.get("iat")
+            fresh: bool = payload.get("fresh", False)
             
             if username is None or user_id is None:
                 raise credentials_exception
+            
+            # Проверяем требование "свежести" токена
+            if require_fresh and not fresh:
+                # Проверяем, не слишком ли старый токен
+                if issued_at:
+                    token_age_minutes = (datetime.utcnow().timestamp() - issued_at) / 60
+                    if token_age_minutes > settings.require_fresh_token_minutes:
+                        raise fresh_token_required_exception
                 
             token_data = TokenData(
                 username=username,

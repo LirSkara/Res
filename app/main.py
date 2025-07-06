@@ -5,10 +5,12 @@ QRes OS 4 - Main Application
 import time
 import traceback
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -18,6 +20,8 @@ from .database import init_db, close_db
 from .schemas import ErrorResponse, HealthCheck
 from .logger import setup_request_logging  # Импорт логгера
 from .security import setup_security  # Импорт компонентов безопасности
+from .security_monitor import security_monitor, start_security_monitor_cleanup  # Импорт монитора безопасности
+from .input_validation import InputSanitizer  # Импорт санитизатора
 
 # Импорт роутеров
 from .routers import (
@@ -59,9 +63,21 @@ async def lifespan(app: FastAPI):
     print("🚀 QRes OS 4 starting up...")
     await init_db()
     print("✅ Database initialized")
+    
+    # Запускаем фоновую задачу очистки данных мониторинга безопасности
+    cleanup_task = asyncio.create_task(start_security_monitor_cleanup())
+    print("🔒 Security monitor started")
+    
     yield
+    
     # Shutdown
     print("🛑 QRes OS 4 shutting down...")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    print("🔒 Security monitor stopped")
     await close_db()
     print("✅ Database connection closed")
 
@@ -118,6 +134,70 @@ setup_request_logging(app)
 # Подключение компонентов безопасности (защита от DDoS-атак)
 setup_security(app)
 
+# Middleware для мониторинга безопасности
+@app.middleware("http")
+async def security_monitoring_middleware(request: Request, call_next):
+    """Мониторинг безопасности запросов"""
+    try:
+        # Записываем запрос в монитор безопасности
+        security_monitor.record_request(request)
+        
+        # Проверяем на подозрительные паттерны в URL
+        url_path = str(request.url.path).lower()
+        if any(pattern in url_path for pattern in ['.env', '.git', 'admin', 'phpmyadmin']):
+            # Логируем подозрительный запрос
+            from .security_logger import security_logger
+            security_logger.log_suspicious_activity(
+                security_monitor.get_client_ip(request),
+                str(request.url),
+                request.method
+            )
+        
+        response = await call_next(request)
+        return response
+        
+    except HTTPException as e:
+        # Если IP заблокирован или превышен лимит запросов
+        raise e
+    except Exception as e:
+        # Логируемunexpected ошибки в мониторе безопасности
+        error_logger.error(f"Security monitoring error: {str(e)}")
+        # Продолжаем обработку запроса
+        response = await call_next(request)
+        return response
+
+# Middleware для ограничения размера запросов
+@app.middleware("http")
+async def request_size_limit_middleware(request: Request, call_next):
+    """Ограничивает размер входящих запросов"""
+    content_length = request.headers.get("content-length")
+    
+    if content_length:
+        content_length = int(content_length)
+        
+        # Проверяем общий размер запроса
+        if content_length > settings.max_request_size:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"Размер запроса превышает лимит {settings.max_request_size // (1024*1024)}MB",
+                    "error_code": "REQUEST_TOO_LARGE"
+                }
+            )
+        
+        # Дополнительная проверка для JSON запросов
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type and content_length > settings.max_json_size:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"Размер JSON запроса превышает лимит {settings.max_json_size // 1024}KB",
+                    "error_code": "JSON_TOO_LARGE"
+                }
+            )
+    
+    return await call_next(request)
+
 # Middleware для базовых заголовков безопасности
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -132,9 +212,44 @@ async def security_headers_middleware(request: Request, call_next):
     # Referrer Policy для приватности
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     
+    # Content Security Policy (CSP)
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    
+    # Permissions Policy для отключения ненужных APIs
+    permissions = (
+        "geolocation=(), "
+        "microphone=(), "
+        "camera=(), "
+        "payment=(), "
+        "usb=(), "
+        "magnetometer=(), "
+        "accelerometer=(), "
+        "gyroscope=()"
+    )
+    response.headers["Permissions-Policy"] = permissions
+    
+    # HSTS для HTTPS (когда будет включен)
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    
     # В разработке показываем, что это dev режим
     if settings.debug:
         response.headers["X-Environment"] = "development"
+        response.headers["X-Debug-Mode"] = "enabled"
+    else:
+        # В продакшене скрываем версию сервера
+        response.headers.pop("server", None)
     
     return response
 
@@ -282,6 +397,28 @@ async def debug_cors(request: Request):
             ],
             "expose_headers": ["Content-Length", "X-Total-Count", "X-Page-Count"]
         },
+        "environment": settings.environment,
+        "debug": settings.debug,
+        "security_note": "⚠️ Этот эндпоинт доступен только в режиме разработки"
+    }
+
+
+@app.get("/debug/security", tags=["Debug"])
+async def debug_security_stats(request: Request):
+    """Отладочный эндпоинт для проверки статистики безопасности (только в dev режиме)"""
+    # Защита: доступ только в режиме разработки
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    from .security_monitor import security_monitor
+    
+    stats = security_monitor.get_security_stats()
+    
+    return {
+        "message": "Security Statistics",
+        "stats": stats,
+        "blocked_ips": list(security_monitor.blocked_ips.keys()) if security_monitor.blocked_ips else [],
+        "suspicious_requests_count": sum(security_monitor.suspicious_requests.values()),
         "environment": settings.environment,
         "debug": settings.debug,
         "security_note": "⚠️ Этот эндпоинт доступен только в режиме разработки"

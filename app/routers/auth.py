@@ -3,7 +3,7 @@ QRes OS 4 - Authentication Router
 Роутер для аутентификации и авторизации
 """
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,8 @@ from ..services.auth import AuthService
 from ..schemas import UserLogin, UserLoginPIN, Token, User as UserSchema, APIResponse
 from ..deps import CurrentUser, DatabaseSession
 from ..config import settings
+from ..security_monitor import security_monitor
+from ..security_logger import security_logger
 
 
 router = APIRouter()
@@ -21,11 +23,14 @@ security = HTTPBearer()
 @router.post("/login", response_model=Token)
 async def login(
     user_credentials: UserLogin,
+    request: Request,
     db: DatabaseSession
 ):
     """
     Вход в систему по логину и паролю
     """
+    client_ip = security_monitor.get_client_ip(request)
+    
     user = await AuthService.authenticate_user(
         db, 
         user_credentials.username, 
@@ -33,11 +38,17 @@ async def login(
     )
     
     if not user:
+        # Записываем неудачную попытку входа
+        security_monitor.record_failed_login(client_ip, user_credentials.username)
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный логин или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Логируем успешный вход
+    security_logger.log_successful_login(client_ip, user.username, user.role.value)
     
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = AuthService.create_access_token(

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     
+    # JWT Security improvements
+    jwt_issuer: str = "qres-os-4"
+    jwt_audience: str = "qres-os-4-users"
+    require_fresh_token_minutes: int = 15  # Время после которого требуется fresh token для критичных операций
+    
     # CRITICAL: Валидация секретного ключа в продакшене
     @validator('secret_key')
     def validate_secret_key(cls, v):
@@ -70,6 +75,10 @@ class Settings(BaseSettings):
     # File Upload
     upload_dir: str = "./uploads"
     max_file_size: int = 5242880  # 5MB
+    
+    # Request size limits
+    max_request_size: int = 10 * 1024 * 1024  # 10MB максимальный размер запроса
+    max_json_size: int = 1024 * 1024  # 1MB для JSON запросов
     
     # Security - DDoS Protection
     rate_limit_max_requests: int = 100  # Максимальное количество запросов
