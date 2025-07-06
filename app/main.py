@@ -14,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .config import settings
 from .database import init_db, close_db
 from .schemas import ErrorResponse, HealthCheck
+from .logger import setup_request_logging  # Импорт логгера
+from .security import setup_security  # Импорт компонентов безопасности
 
 # Импорт роутеров
 from .routers import (
@@ -65,6 +67,12 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["*"]  # В продакшене настроить конкретные хосты
 )
+
+# Подключение middleware логирования API-запросов
+setup_request_logging(app)
+
+# Подключение компонентов безопасности (защита от DDoS-атак)
+setup_security(app)
 
 
 # Обработчики ошибок

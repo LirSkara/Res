@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size: int = 5242880  # 5MB
     
+    # Security - DDoS Protection
+    rate_limit_max_requests: int = 100  # Максимальное количество запросов
+    rate_limit_window: int = 60  # Временное окно в секундах (1 минута)
+    rate_limit_block_duration: int = 600  # Длительность блокировки (10 минут)
+    disable_rate_limit_in_debug: bool = True  # Отключать ли ограничение в режиме разработки
+    
     # Restaurant
     restaurant_name: str = "QRes OS 4 Restaurant"
     restaurant_timezone: str = "Europe/Moscow"
