@@ -46,25 +46,25 @@ if settings.debug:
 
 # CRUD операции для более понятной маркировки в логах
 CRUD_OPERATIONS = {
-    "GET": "🔍 READ",
-    "POST": "➕ CREATE",
-    "PUT": "🔄 UPDATE",
-    "PATCH": "🔧 PARTIAL_UPDATE",
-    "DELETE": "❌ DELETE",
-    "OPTIONS": "📋 OPTIONS",
-    "HEAD": "📝 HEAD"
+    "GET": "🔍 ЧТЕНИЕ",
+    "POST": "➕ СОЗДАНИЕ",
+    "PUT": "🔄 ОБНОВЛЕНИЕ",
+    "PATCH": "🔧 ЧАСТИЧН_ОБНОВЛ",
+    "DELETE": "❌ УДАЛЕНИЕ",
+    "OPTIONS": "📋 ОПЦИИ",
+    "HEAD": "📝 ЗАГОЛОВКИ"
 }
 
 # Цвета для консоли для разных методов (не влияют на файл логов)
 METHOD_COLORS = {
-    "GET": "\033[94m",     # Blue
-    "POST": "\033[92m",    # Green
-    "PUT": "\033[93m",     # Yellow
-    "PATCH": "\033[96m",   # Cyan
-    "DELETE": "\033[91m",  # Red
-    "OPTIONS": "\033[95m", # Purple
-    "HEAD": "\033[97m",    # White
-    "RESET": "\033[0m"     # Reset
+    "GET": "\033[94m",     # Синий
+    "POST": "\033[92m",    # Зеленый
+    "PUT": "\033[93m",     # Желтый
+    "PATCH": "\033[96m",   # Циан
+    "DELETE": "\033[91m",  # Красный
+    "OPTIONS": "\033[95m", # Фиолетовый
+    "HEAD": "\033[97m",    # Белый
+    "RESET": "\033[0m"     # Сброс
 }
 
 
@@ -80,8 +80,8 @@ class APIRequestLoggingMiddleware(BaseHTTPMiddleware):
         method = request.method
         path = request.url.path
         query_params = dict(request.query_params)
-        client_ip = request.client.host if request.client else "unknown"
-        user_agent = request.headers.get("user-agent", "unknown")
+        client_ip = request.client.host if request.client else "неизвестен"
+        user_agent = request.headers.get("user-agent", "неизвестен")
         
         # Выполняем запрос без попыток считать тело запроса
         response = await call_next(request)

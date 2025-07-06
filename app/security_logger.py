@@ -74,7 +74,7 @@ class SecurityLogger:
     
     def log_failed_login(self, ip: str, username: str, user_agent: str = "unknown"):
         """Логирование неудачной попытки входа"""
-        message = f"Failed login attempt - IP: {ip}, Username: {username}"
+        message = f"Неудачная попытка входа - IP: {ip}, Пользователь: {username}"
         details = {
             "ip": ip,
             "username": username,
@@ -85,7 +85,7 @@ class SecurityLogger:
     
     def log_successful_login(self, ip: str, username: str, role: str, user_agent: str = "unknown"):
         """Логирование успешного входа"""
-        message = f"Successful login - IP: {ip}, Username: {username}, Role: {role}"
+        message = f"Успешный вход - IP: {ip}, Пользователь: {username}, Роль: {role}"
         details = {
             "ip": ip,
             "username": username,
@@ -97,7 +97,7 @@ class SecurityLogger:
     
     def log_logout(self, ip: str, username: str, user_agent: str = "unknown"):
         """Логирование выхода из системы"""
-        message = f"User logout - IP: {ip}, Username: {username}"
+        message = f"Выход пользователя - IP: {ip}, Пользователь: {username}"
         details = {
             "ip": ip,
             "username": username,
@@ -108,7 +108,7 @@ class SecurityLogger:
     
     def log_suspicious_activity(self, ip: str, url: str, method: str, user_agent: str = "unknown"):
         """Логирование подозрительной активности"""
-        message = f"Suspicious activity detected - IP: {ip}, URL: {url}, Method: {method}"
+        message = f"Обнаружена подозрительная активность - IP: {ip}, URL: {url}, Метод: {method}"
         details = {
             "ip": ip,
             "url": url,
@@ -120,7 +120,7 @@ class SecurityLogger:
     
     def log_rate_limit_exceeded(self, ip: str, request_count: int, user_agent: str = "unknown"):
         """Логирование превышения лимита запросов"""
-        message = f"Rate limit exceeded - IP: {ip}, Requests: {request_count}"
+        message = f"Превышен лимит запросов - IP: {ip}, Запросов: {request_count}"
         details = {
             "ip": ip,
             "request_count": request_count,
@@ -131,7 +131,7 @@ class SecurityLogger:
     
     def log_ip_blocked(self, ip: str, reason: str, duration: int = 3600):
         """Логирование блокировки IP"""
-        message = f"IP blocked - IP: {ip}, Reason: {reason}, Duration: {duration}s"
+        message = f"IP заблокирован - IP: {ip}, Причина: {reason}, Длительность: {duration}с"
         details = {
             "ip": ip,
             "reason": reason,
@@ -142,7 +142,7 @@ class SecurityLogger:
     
     def log_ip_unblocked(self, ip: str, reason: str = "manual"):
         """Логирование разблокировки IP"""
-        message = f"IP unblocked - IP: {ip}, Reason: {reason}"
+        message = f"IP разблокирован - IP: {ip}, Причина: {reason}"
         details = {
             "ip": ip,
             "reason": reason,
@@ -152,7 +152,7 @@ class SecurityLogger:
     
     def log_security_violation(self, ip: str, violation_type: str, details: Dict[str, Any]):
         """Логирование нарушения безопасности"""
-        message = f"Security violation - IP: {ip}, Type: {violation_type}"
+        message = f"Нарушение безопасности - IP: {ip}, Тип: {violation_type}"
         violation_details = {
             "ip": ip,
             "violation_type": violation_type,

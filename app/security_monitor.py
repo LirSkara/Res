@@ -24,7 +24,7 @@ class SecurityMonitor:
         # Настройки
         self.max_failed_logins = 5  # Максимум неудачных попыток входа
         self.login_window = 300  # Окно в секундах (5 минут)
-        self.max_requests_per_minute = 60  # Максимум запросов в минуту
+        self.max_requests_per_minute = 100  # Максимум запросов в минуту
         self.block_duration = 3600  # Время блокировки в секундах (1 час)
         self.suspicious_threshold = 10  # Порог подозрительной активности
         
@@ -65,7 +65,7 @@ class SecurityMonitor:
         
         # Проверяем на превышение лимита
         if len(self.failed_logins[ip]) >= self.max_failed_logins:
-            self.block_ip(ip, "Too many failed login attempts")
+            self.block_ip(ip, "Слишком много неудачных попыток входа")
             return True
         
         return False
@@ -77,7 +77,7 @@ class SecurityMonitor:
         
         # Проверяем, заблокирован ли IP
         if self.is_ip_blocked(ip):
-            raise HTTPException(status_code=429, detail="IP temporarily blocked")
+            raise HTTPException(status_code=429, detail="IP адрес временно заблокирован")
         
         # Очищаем старые записи запросов
         while (self.request_counts[ip] and 
@@ -89,9 +89,9 @@ class SecurityMonitor:
         
         # Проверяем превышение лимита запросов
         if len(self.request_counts[ip]) > self.max_requests_per_minute:
-            self.block_ip(ip, "Too many requests per minute")
+            self.block_ip(ip, "Превышен лимит запросов в минуту")
             security_logger.log_rate_limit_exceeded(ip, len(self.request_counts[ip]))
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+            raise HTTPException(status_code=429, detail="Превышен лимит запросов")
         
         # Проверяем на подозрительную активность
         if self.is_suspicious_request(request):
@@ -99,7 +99,7 @@ class SecurityMonitor:
             security_logger.log_suspicious_activity(ip, str(request.url), request.method)
             
             if self.suspicious_requests[ip] >= self.suspicious_threshold:
-                self.block_ip(ip, "Suspicious activity detected")
+                self.block_ip(ip, "Обнаружена подозрительная активность")
                 return True
         
         return False

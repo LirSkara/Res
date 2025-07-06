@@ -60,26 +60,26 @@ if not error_logger.handlers:
 async def lifespan(app: FastAPI):
     """Жизненный цикл приложения"""
     # Startup
-    print("🚀 QRes OS 4 starting up...")
+    print("🚀 QRes OS 4 запускается...")
     await init_db()
-    print("✅ Database initialized")
+    print("✅ База данных инициализирована")
     
     # Запускаем фоновую задачу очистки данных мониторинга безопасности
     cleanup_task = asyncio.create_task(start_security_monitor_cleanup())
-    print("🔒 Security monitor started")
+    print("🔒 Монитор безопасности запущен")
     
     yield
     
     # Shutdown
-    print("🛑 QRes OS 4 shutting down...")
+    print("🛑 QRes OS 4 завершает работу...")
     cleanup_task.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
         pass
-    print("🔒 Security monitor stopped")
+    print("🔒 Монитор безопасности остановлен")
     await close_db()
-    print("✅ Database connection closed")
+    print("✅ Соединение с базой данных закрыто")
 
 
 # Создание FastAPI приложения
@@ -383,7 +383,7 @@ async def debug_cors(request: Request):
     origin = request.headers.get("origin", "Не указан")
     
     return {
-        "message": "CORS Debug Information",
+        "message": "Информация отладки CORS",
         "configured_origins": settings.cors_origins,
         "allowed_hosts": settings.allowed_hosts,
         "request_origin": origin,
@@ -415,7 +415,7 @@ async def debug_security_stats(request: Request):
     stats = security_monitor.get_security_stats()
     
     return {
-        "message": "Security Statistics",
+        "message": "Статистика безопасности",
         "stats": stats,
         "blocked_ips": list(security_monitor.blocked_ips.keys()) if security_monitor.blocked_ips else [],
         "suspicious_requests_count": sum(security_monitor.suspicious_requests.values()),

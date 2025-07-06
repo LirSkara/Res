@@ -71,7 +71,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             else:
                 # Возвращаем ошибку 429 Too Many Requests
                 return Response(
-                    content="Rate limit exceeded. Try again later.",
+                    content="Превышен лимит запросов. Попробуйте позже.",
                     status_code=429,
                     media_type="text/plain",
                     headers={"Retry-After": str(int(self.blocked_ips[client_ip] - now))}
@@ -83,7 +83,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         if is_rate_limited:
             # Возвращаем ошибку 429 Too Many Requests
             return Response(
-                content="Rate limit exceeded. Try again later.",
+                content="Превышен лимит запросов. Попробуйте позже.",
                 status_code=429,
                 media_type="text/plain",
                 headers={"Retry-After": str(retry_after)}
@@ -164,7 +164,7 @@ class SuspiciousRequestFilterMiddleware(BaseHTTPMiddleware):
                 self._log_suspicious_request(client_ip, path, user_agent, "suspicious_path")
                 # Возвращаем ошибку 404
                 return Response(
-                    content="Not Found",
+                    content="Не найдено",
                     status_code=404,
                     media_type="text/plain"
                 )
@@ -176,7 +176,7 @@ class SuspiciousRequestFilterMiddleware(BaseHTTPMiddleware):
                 self._log_suspicious_request(client_ip, path, user_agent, "suspicious_agent")
                 # Возвращаем ошибку 403
                 return Response(
-                    content="Forbidden",
+                    content="Запрещено",
                     status_code=403,
                     media_type="text/plain"
                 )
