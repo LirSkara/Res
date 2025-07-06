@@ -6,7 +6,7 @@ import time
 import traceback
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -90,13 +90,26 @@ app.add_middleware(
     allow_origins=settings.cors_origins,  # Используем настройки из конфига
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Ограничиваем методы
-    allow_headers=["*"],  # Authorization, Content-Type, etc.
-    expose_headers=["*"]  # Разрешаем доступ ко всем заголовкам ответа
+    # ИСПРАВЛЕНО: Конкретные заголовки вместо wildcard для безопасности
+    allow_headers=[
+        "Authorization",      # Токены авторизации
+        "Content-Type",       # Тип контента
+        "Accept",            # Accept заголовок
+        "Origin",            # CORS origin
+        "X-Requested-With",  # AJAX запросы
+        "X-CSRF-Token"       # CSRF защита
+    ],
+    # ИСПРАВЛЕНО: Минимальный набор заголовков ответа
+    expose_headers=[
+        "Content-Length",    # Размер контента
+        "X-Total-Count",     # Общее количество (для пагинации)
+        "X-Page-Count"       # Количество страниц
+    ]
 )
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"]  # В продакшене настроить конкретные хосты
+    allowed_hosts=settings.allowed_hosts  # Используем конкретные хосты для безопасности
 )
 
 # Подключение middleware логирования API-запросов
@@ -104,6 +117,26 @@ setup_request_logging(app)
 
 # Подключение компонентов безопасности (защита от DDoS-атак)
 setup_security(app)
+
+# Middleware для базовых заголовков безопасности
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Добавляет базовые заголовки безопасности"""
+    response = await call_next(request)
+    
+    # Защита от XSS
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"  
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Referrer Policy для приватности
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    # В разработке показываем, что это dev режим
+    if settings.debug:
+        response.headers["X-Environment"] = "development"
+    
+    return response
 
 
 # Обработчики ошибок
@@ -227,22 +260,31 @@ async def health_check():
 
 @app.get("/debug/cors", tags=["Debug"])
 async def debug_cors(request: Request):
-    """Отладочный эндпоинт для проверки CORS настроек"""
+    """Отладочный эндпоинт для проверки CORS настроек (только в dev режиме)"""
+    # Защита: доступ только в режиме разработки
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="Not found")
+    
     origin = request.headers.get("origin", "Не указан")
     
     return {
         "message": "CORS Debug Information",
         "configured_origins": settings.cors_origins,
+        "allowed_hosts": settings.allowed_hosts,
         "request_origin": origin,
         "origin_allowed": origin in settings.cors_origins,
         "cors_config": {
             "allow_credentials": True,
             "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["*"],
-            "expose_headers": ["*"]
+            "allow_headers": [
+                "Authorization", "Content-Type", "Accept", 
+                "Origin", "X-Requested-With", "X-CSRF-Token"
+            ],
+            "expose_headers": ["Content-Length", "X-Total-Count", "X-Page-Count"]
         },
         "environment": settings.environment,
-        "debug": settings.debug
+        "debug": settings.debug,
+        "security_note": "⚠️ Этот эндпоинт доступен только в режиме разработки"
     }
 
 
