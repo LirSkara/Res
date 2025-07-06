@@ -12,6 +12,9 @@ import os
 class Settings(BaseSettings):
     """Настройки приложения с валидацией"""
     
+    # Environment
+    environment: str = "development"  # development, staging, production
+    
     # Database
     database_url: str = "sqlite+aiosqlite:///./app.db"
     
@@ -21,14 +24,30 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     
+    # CRITICAL: Валидация секретного ключа в продакшене
+    @validator('secret_key')
+    def validate_secret_key(cls, v):
+        if v == "your-super-secret-key-change-in-production":
+            import os
+            if os.getenv("ENVIRONMENT") == "production":
+                raise ValueError("🚨 КРИТИЧЕСКАЯ ОШИБКА: Измените secret_key в продакшене!")
+        if len(v) < 32:
+            raise ValueError("Секретный ключ должен быть не менее 32 символов")
+        return v
+    
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = True
     reload: bool = True
     
-    # CORS - Разрешаем все origins для разработки
-    cors_origins: List[str] = ["*"]
+    # CORS - Конфигурируем origins в зависимости от окружения
+    cors_origins: List[str] = [
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173", 
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000"
+    ]
     
     # QR Code
     qr_base_url: str = "http://192.168.1.100:8000/menu"

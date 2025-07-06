@@ -3,8 +3,10 @@ QRes OS 4 - Main Application
 Точка входа в приложение FastAPI
 """
 import time
+import traceback
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -23,6 +25,31 @@ from .routers import (
     orders, order_items, ingredients, 
     paymentmethod, websocket
 )
+
+# Настройка логгера для ошибок
+error_logger = logging.getLogger("qres_errors")
+error_logger.setLevel(logging.WARNING)  # Изменено с ERROR на WARNING
+
+# Создаем хендлер для ошибок если он еще не создан
+if not error_logger.handlers:
+    from pathlib import Path
+    LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
+    LOGS_DIR.mkdir(exist_ok=True)
+    
+    # Файловый хендлер для ошибок
+    error_file_handler = logging.FileHandler(LOGS_DIR / "errors.log", encoding='utf-8')
+    error_formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    error_file_handler.setFormatter(error_formatter)
+    error_logger.addHandler(error_file_handler)
+    
+    # Консольный хендлер для разработки
+    if settings.debug:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(error_formatter)
+        error_logger.addHandler(console_handler)
 
 
 @asynccontextmanager
@@ -56,9 +83,10 @@ start_time = time.time()
 # CORS Middleware - настроен для разработки фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Разрешаем все origins для разработки
+    allow_origins=settings.cors_origins,  # Используем настройки из конфига
+    # allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # GET, POST, PUT, DELETE, OPTIONS, etc.
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Ограничиваем методы
     allow_headers=["*"],  # Authorization, Content-Type, etc.
     expose_headers=["*"]  # Разрешаем доступ ко всем заголовкам ответа
 )
@@ -77,8 +105,16 @@ setup_security(app)
 
 # Обработчики ошибок
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Обработка HTTP ошибок"""
+    # Логируем только серьезные ошибки (4xx и 5xx)
+    if exc.status_code >= 400:
+        error_logger.warning(
+            f"HTTP ошибка {exc.status_code}: {exc.detail} | "
+            f"{request.method} {request.url} | "
+            f"Client: {request.client.host if request.client else 'unknown'}"
+        )
+    
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(
@@ -89,28 +125,77 @@ async def http_exception_handler(request, exc):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработка ошибок валидации"""
+    error_details = exc.errors()
+    
+    # Логируем ошибки валидации для анализа
+    error_logger.warning(
+        f"Ошибка валидации: {request.method} {request.url} | "
+        f"Client: {request.client.host if request.client else 'unknown'} | "
+        f"Errors: {error_details}"
+    )
+    
     return JSONResponse(
         status_code=422,
         content=ErrorResponse(
             message="Ошибка валидации данных",
             error_code="VALIDATION_ERROR",
-            details={"errors": exc.errors()}
+            details={"errors": error_details}
         ).model_dump()
     )
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
+async def general_exception_handler(request: Request, exc: Exception):
     """Обработка общих ошибок"""
-    return JSONResponse(
-        status_code=500,
-        content=ErrorResponse(
-            message="Внутренняя ошибка сервера",
-            error_code="INTERNAL_SERVER_ERROR"
-        ).model_dump()
+    
+    # Получаем детальную информацию об ошибке
+    error_traceback = traceback.format_exc()
+    
+    # Информация о запросе
+    request_info = {
+        "method": request.method,
+        "url": str(request.url),
+        "client": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "headers": dict(request.headers) if settings.debug else {}
+    }
+    
+    # Логируем с максимальной детализацией
+    error_message = (
+        f"Необработанная ошибка: {type(exc).__name__}: {str(exc)}\n"
+        f"Запрос: {request.method} {request.url}\n"
+        f"Клиент: {request_info['client']}\n"
+        f"User-Agent: {request_info['user_agent']}\n"
+        f"Traceback:\n{error_traceback}"
     )
+    
+    error_logger.error(error_message)
+    
+    # В режиме разработки возвращаем детальную информацию
+    if settings.debug:
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                message=f"Внутренняя ошибка сервера: {str(exc)}",
+                error_code="INTERNAL_SERVER_ERROR",
+                details={
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "request_info": request_info
+                }
+            ).model_dump()
+        )
+    else:
+        # В продакшене не раскрываем детали ошибки
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                message="Внутренняя ошибка сервера",
+                error_code="INTERNAL_SERVER_ERROR"
+            ).model_dump()
+        )
 
 
 # Основные роуты

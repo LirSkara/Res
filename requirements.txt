@@ -2,6 +2,7 @@
 # Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+gunicorn==21.2.0  # Production WSGI server
 
 # Database
 sqlalchemy==2.0.23
@@ -23,6 +24,12 @@ pydantic-settings==2.1.0
 httpx==0.25.2
 qrcode[pil]==7.4.2
 python-slugify==8.0.1
+python-dateutil==2.8.2  # For timezone handling
+
+# Optional dependencies (uncomment if needed)
+# email-validator==2.1.0  # For email validation
+# redis==5.0.1  # For caching and sessions
+# celery==5.3.4  # For background tasks
 
 # Development
 pytest==7.4.3

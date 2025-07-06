@@ -54,8 +54,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-        except Exception:
+        except Exception as e:
             await session.rollback()
+            # Логируем только реальные ошибки БД, не validation errors
+            if "ValidationError" not in str(type(e)):
+                from .logger import api_logger
+                api_logger.error(f"Ошибка базы данных: {str(e)}")
             raise
         finally:
             await session.close()

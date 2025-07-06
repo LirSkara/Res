@@ -42,7 +42,12 @@ class AuthService:
         else:
             expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
         
-        to_encode.update({"exp": expire})
+        # Добавляем дополнительные claims для безопасности
+        to_encode.update({
+            "exp": expire,
+            "iat": datetime.utcnow(),  # Время выдачи токена
+            "iss": "qres-os-4"  # Издатель токена
+        })
         encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
         return encoded_jwt
     
