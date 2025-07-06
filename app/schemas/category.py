@@ -14,6 +14,8 @@ class CategoryBase(BaseModel):
     image_url: Optional[str] = Field(None, max_length=255)
     sort_order: int = Field(0, ge=0)
     is_active: bool = True
+    color: Optional[str] = Field(None, max_length=10, description="Цвет категории в формате HEX, например #e74c3c")
+    featured: bool = Field(False, description="Отмечена ли категория как особая/избранная")
 
 
 class CategoryCreate(CategoryBase):
@@ -28,6 +30,8 @@ class CategoryUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=255)
     sort_order: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
+    color: Optional[str] = Field(None, max_length=10)
+    featured: Optional[bool] = None
 
 
 class Category(CategoryBase):

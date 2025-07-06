@@ -24,6 +24,8 @@ class Category(Base):
     image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    color: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # Цвет категории (например, #e74c3c)
+    featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Отмечена ли категория как особая
     
     # Relationships
     dishes: Mapped[List["Dish"]] = relationship(

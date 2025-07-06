@@ -1,0 +1,84 @@
+Полный список API endpoints QRes OS 4
+🔐 Authentication (/auth)
+POST /auth/login - Вход по логину и паролю
+POST /auth/login/pin - Вход по логину и PIN-коду
+GET /auth/me - Информация о текущем пользователе
+POST /auth/logout - Выход из системы
+👥 Users (/users)
+GET /users/waiters - Список официантов (публичный)
+GET /users/ - Список пользователей (админ)
+POST /users/ - Создать пользователя (админ)
+GET /users/{user_id} - Получить пользователя (админ)
+PATCH /users/{user_id} - Обновить пользователя (админ)
+PATCH /users/{user_id}/password - Сменить пароль (админ)
+DELETE /users/{user_id} - Деактивировать пользователя (админ)
+🪑 Tables (/tables)
+GET /tables/ - Список столиков
+POST /tables/ - Создать столик (админ)
+GET /tables/{table_id} - Получить столик
+PATCH /tables/{table_id} - Обновить столик (админ)
+PATCH /tables/{table_id}/status - Изменить статус занятости
+GET /tables/{table_id}/qr - Информация о QR-коде
+DELETE /tables/{table_id} - Деактивировать столик (админ)
+📍 Locations (Зоны) (/locations)
+GET /locations/ - Список локаций
+POST /locations/ - Создать локацию (админ)
+GET /locations/{location_id} - Получить локацию
+PATCH /locations/{location_id} - Обновить локацию (админ)
+GET /locations/{location_id}/tables - Столики в локации
+DELETE /locations/{location_id} - Деактивировать локацию (админ)
+🗂️ Categories (/categories)
+GET /categories/ - Список категорий
+POST /categories/ - Создать категорию (админ)
+GET /categories/{category_id} - Получить категорию
+PATCH /categories/{category_id} - Обновить категорию (админ)
+GET /categories/{category_id}/dishes - Блюда в категории
+DELETE /categories/{category_id} - Деактивировать категорию (админ)
+🍽️ Dishes (/dishes)
+GET /dishes/ - Список блюд
+GET /dishes/menu - Меню для клиентов (публичный)
+POST /dishes/ - Создать блюдо (админ)
+GET /dishes/{dish_id} - Получить блюдо
+PATCH /dishes/{dish_id} - Обновить блюдо (админ)
+PATCH /dishes/{dish_id}/availability - Изменить доступность (админ)
+DELETE /dishes/{dish_id} - Деактивировать блюдо (админ)
+Вариации блюд
+GET /dishes/{dish_id}/variations/ - Список вариаций блюда
+POST /dishes/{dish_id}/variations/ - Создать вариацию (админ)
+GET /dishes/{dish_id}/variations/{variation_id} - Получить вариацию
+PATCH /dishes/{dish_id}/variations/{variation_id} - Обновить вариацию (админ)
+PATCH /dishes/{dish_id}/variations/{variation_id}/availability - Изменить доступность
+DELETE /dishes/{dish_id}/variations/{variation_id} - Удалить вариацию (админ)
+📋 Orders (/orders)
+GET /orders/ - Список заказов
+POST /orders/ - Создать заказ
+GET /orders/{order_id} - Получить заказ
+PATCH /orders/{order_id}/status - Изменить статус заказа
+PATCH /orders/{order_id}/payment - Изменить статус оплаты
+GET /orders/stats/summary - Статистика заказов
+DELETE /orders/{order_id} - Отменить заказ
+Позиции заказов
+POST /orders/{order_id}/items/ - Добавить блюдо в заказ
+PATCH /orders/{order_id}/items/{item_id} - Обновить позицию
+PATCH /orders/{order_id}/items/{item_id}/status - Изменить статус позиции
+DELETE /orders/{order_id}/items/{item_id} - Удалить позицию
+🥬 Ingredients (/ingredients)
+GET /ingredients/ - Список ингредиентов
+POST /ingredients/ - Создать ингредиент (админ)
+GET /ingredients/{ingredient_id} - Получить ингредиент
+PATCH /ingredients/{ingredient_id} - Обновить ингредиент (админ)
+GET /ingredients/allergens/list - Список аллергенов
+DELETE /ingredients/{ingredient_id} - Удалить ингредиент (админ)
+💳 Payment Methods (/payment-methods)
+GET /payment-methods/ - Список способов оплаты
+GET /payment-methods/active - Активные способы оплаты
+POST /payment-methods/ - Создать способ оплаты (админ)
+GET /payment-methods/{payment_method_id} - Получить способ оплаты
+PATCH /payment-methods/{payment_method_id} - Обновить способ оплаты (админ)
+DELETE /payment-methods/{payment_method_id} - Деактивировать способ оплаты (админ)
+🔄 WebSocket (/ws)
+WS /ws/orders - WebSocket для real-time уведомлений
+🏠 System
+GET / - Корневой endpoint
+GET /health - Проверка состояния системы
+Итого: 64 API endpoints
