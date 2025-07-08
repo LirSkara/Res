@@ -39,6 +39,10 @@ async def check_data_integrity(db: AsyncSession) -> Dict[str, Any]:
         "recommendations": []
     }
     
+    # Устанавливаем timestamp
+    from datetime import datetime
+    integrity_report["timestamp"] = datetime.now().isoformat()
+    
     # Получаем статистику по локациям
     locations_query = select(Location)
     locations_result = await db.execute(locations_query)

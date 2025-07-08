@@ -60,6 +60,35 @@ async def get_locations(
     
     return LocationList(locations=locations, total=total)
 
+@router.get("/admin/integrity-check", response_model=dict)
+async def check_locations_integrity(
+    db: DatabaseSession,
+    admin_user: AdminUser
+):
+    """
+    Проверка целостности данных локаций и столиков (только для администраторов)
+    """
+    integrity_report = await check_data_integrity(db)
+    return integrity_report
+
+
+@router.post("/admin/auto-fix", response_model=dict)
+async def auto_fix_locations_integrity(
+    db: DatabaseSession,
+    admin_user: AdminUser,
+    dry_run: bool = Query(True, description="Предварительный просмотр без применения изменений"),
+    fix_types: List[str] = Query(None, description="Типы проблем для исправления")
+):
+    """
+    Автоматическое исправление проблем целостности (только для администраторов)
+    """
+    fix_result = await auto_fix_integrity_issues(
+        db=db,
+        fix_types=fix_types,
+        dry_run=dry_run
+    )
+    return fix_result
+
 
 @router.post("/", response_model=LocationSchema)
 async def create_location(
@@ -329,33 +358,3 @@ async def delete_location(
         return APIResponse(
             message=f"Локация '{location.name}' удалена"
         )
-
-
-@router.get("/admin/integrity-check", response_model=dict)
-async def check_locations_integrity(
-    db: DatabaseSession,
-    admin_user: AdminUser
-):
-    """
-    Проверка целостности данных локаций и столиков (только для администраторов)
-    """
-    integrity_report = await check_data_integrity(db)
-    return integrity_report
-
-
-@router.post("/admin/auto-fix", response_model=dict)
-async def auto_fix_locations_integrity(
-    db: DatabaseSession,
-    admin_user: AdminUser,
-    dry_run: bool = Query(True, description="Предварительный просмотр без применения изменений"),
-    fix_types: List[str] = Query(None, description="Типы проблем для исправления")
-):
-    """
-    Автоматическое исправление проблем целостности (только для администраторов)
-    """
-    fix_result = await auto_fix_integrity_issues(
-        db=db,
-        fix_types=fix_types,
-        dry_run=dry_run
-    )
-    return fix_result
