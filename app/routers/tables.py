@@ -16,6 +16,7 @@ from ..schemas import (
     TableWithLocation, TableList, QRCodeResponse, APIResponse
 )
 from ..config import settings
+from ..services.locations import check_location_has_active_orders
 
 
 router = APIRouter()
@@ -103,8 +104,15 @@ async def create_table(
         if not location.is_active and table_data.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Нельзя создать активный столик в неактивной локации"
+                detail=f"Нельзя создать активный столик в неактивной локации '{location.name}'"
             )
+    
+    # Если локация не указана, но столик должен быть активным - предупреждаем
+    elif table_data.is_active and not table_data.location_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Активный столик должен быть привязан к локации"
+        )
     
     # Создаем столик с уникальным QR-кодом
     new_table = Table(
@@ -193,7 +201,7 @@ async def update_table(
         if not location.is_active and table_data.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Нельзя активировать столик в неактивной локации"
+                detail=f"Нельзя активировать столик в неактивной локации '{location.name}'"
             )
     
     # Дополнительная проверка: если активируется столик, проверяем его текущую локацию
@@ -236,7 +244,7 @@ async def update_table_status(
     """
     Изменить статус занятости столика (для официантов и администраторов)
     """
-    query = select(Table).where(Table.id == table_id)
+    query = select(Table).options(selectinload(Table.location_obj)).where(Table.id == table_id)
     result = await db.execute(query)
     table = result.scalar_one_or_none()
     
@@ -252,12 +260,21 @@ async def update_table_status(
             detail="Столик неактивен"
         )
     
+    # Проверяем статус локации
+    if table.location_obj and not table.location_obj.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Нельзя изменить статус столика в неактивной локации '{table.location_obj.name}'"
+        )
+    
     table.is_occupied = status_data.is_occupied
     await db.commit()
     
     status_text = "занят" if status_data.is_occupied else "свободен"
+    location_info = f" в локации '{table.location_obj.name}'" if table.location_obj else ""
+    
     return APIResponse(
-        message=f"Статус столика {table.number} изменен: {status_text}"
+        message=f"Статус столика {table.number}{location_info} изменен: {status_text}"
     )
 
 
@@ -290,6 +307,112 @@ async def get_table_qr_info(
     )
 
 
+@router.get("/{table_id}/sync-status", response_model=dict)
+async def get_table_sync_status(
+    table_id: int,
+    db: DatabaseSession,
+    current_user: CurrentUser
+):
+    """
+    Проверить статус синхронизации столика с его локацией
+    """
+    query = select(Table).options(selectinload(Table.location_obj)).where(Table.id == table_id)
+    result = await db.execute(query)
+    table = result.scalar_one_or_none()
+    
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Столик не найден"
+        )
+    
+    sync_status = {
+        "table_id": table.id,
+        "table_number": table.number,
+        "table_is_active": table.is_active,
+        "location_id": table.location_id,
+        "location_name": table.location_obj.name if table.location_obj else None,
+        "location_is_active": table.location_obj.is_active if table.location_obj else None,
+        "is_synchronized": True,
+        "sync_issues": []
+    }
+    
+    # Проверяем различные проблемы синхронизации
+    if table.location_obj:
+        # Проверка: активный столик в неактивной локации
+        if table.is_active and not table.location_obj.is_active:
+            sync_status["is_synchronized"] = False
+            sync_status["sync_issues"].append(
+                "Столик активен, но находится в неактивной локации"
+            )
+        
+        # Проверка: столик с заказом в неактивной локации
+        if table.current_order_id and not table.location_obj.is_active:
+            sync_status["is_synchronized"] = False
+            sync_status["sync_issues"].append(
+                "У столика есть активный заказ, но локация неактивна"
+            )
+    else:
+        # Столик без локации
+        if table.is_active:
+            sync_status["is_synchronized"] = False
+            sync_status["sync_issues"].append(
+                "Активный столик не привязан к локации"
+            )
+    
+    return sync_status
+
+
+@router.patch("/{table_id}/force-sync", response_model=APIResponse)
+async def force_sync_table_with_location(
+    table_id: int,
+    db: DatabaseSession,
+    admin_user: AdminUser
+):
+    """
+    Принудительная синхронизация столика с его локацией (только для администраторов)
+    """
+    query = select(Table).options(selectinload(Table.location_obj)).where(Table.id == table_id)
+    result = await db.execute(query)
+    table = result.scalar_one_or_none()
+    
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Столик не найден"
+        )
+    
+    changes = []
+    
+    if table.location_obj:
+        # Синхронизируем с локацией
+        if table.is_active and not table.location_obj.is_active:
+            table.is_active = False
+            table.is_occupied = False
+            table.current_order_id = None
+            changes.append("деактивирован")
+            changes.append("освобожден")
+            if table.current_order_id:
+                changes.append("сброшен активный заказ")
+    else:
+        # Столик без локации - деактивируем если активен
+        if table.is_active:
+            table.is_active = False
+            table.is_occupied = False
+            table.current_order_id = None
+            changes.append("деактивирован (нет локации)")
+    
+    if changes:
+        await db.commit()
+        return APIResponse(
+            message=f"Столик {table.number} синхронизирован: {', '.join(changes)}"
+        )
+    else:
+        return APIResponse(
+            message=f"Столик {table.number} уже синхронизирован с локацией"
+        )
+
+
 @router.delete("/{table_id}", response_model=APIResponse)
 async def delete_table(
     table_id: int,
@@ -299,7 +422,7 @@ async def delete_table(
     """
     Удалить или деактивировать столик (только для администраторов)
     """
-    query = select(Table).where(Table.id == table_id)
+    query = select(Table).options(selectinload(Table.location_obj)).where(Table.id == table_id)
     result = await db.execute(query)
     table = result.scalar_one_or_none()
     
@@ -313,13 +436,18 @@ async def delete_table(
     if table.current_order_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Нельзя удалить столик с активным заказом"
+            detail=f"Нельзя удалить столик {table.number} с активным заказом (ID: {table.current_order_id})"
         )
     
-    # Деактивируем вместо удаления
+    # Деактивируем вместо удаления и сбрасываем все статусы
     table.is_active = False
+    table.is_occupied = False
+    table.current_order_id = None
+    
     await db.commit()
     
+    location_info = f" в локации '{table.location_obj.name}'" if table.location_obj else ""
+    
     return APIResponse(
-        message=f"Столик {table.number} деактивирован"
+        message=f"Столик {table.number}{location_info} деактивирован"
     )

@@ -21,6 +21,43 @@ BASE_DIR = Path(__file__).resolve().parent.parent  # Путь к корню пр
 LOGS_DIR = BASE_DIR / "logs"  # Абсолютный путь к директории с логами
 LOGS_DIR.mkdir(exist_ok=True)
 
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    Создает и возвращает именованный логгер с настроенным форматированием
+    
+    Args:
+        name: Имя логгера (обычно __name__ модуля)
+        
+    Returns:
+        Настроенный логгер
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    
+    # Проверяем, есть ли уже обработчики у логгера
+    if not logger.handlers:
+        # Форматтер для красивого отображения логов
+        formatter = logging.Formatter(
+            '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # Хендлер для записи в файл
+        log_file = LOGS_DIR / "app.log"
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
+        # Хендлер для отображения в консоли при разработке
+        if settings.debug:
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
+    
+    return logger
+
+
 # Настраиваем логгер для API запросов
 api_logger = logging.getLogger("api_requests")
 api_logger.setLevel(logging.INFO)

@@ -2,7 +2,7 @@
 QRes OS 4 - Locations Router
 Роутер для управления локациями/зонами ресторана
 """
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -14,6 +14,12 @@ from ..schemas import (
     Location as LocationSchema, LocationCreate, LocationUpdate,
     LocationWithTables, LocationList, APIResponse
 )
+from ..services.locations import (
+    sync_tables_with_location_status,
+    check_location_has_active_orders,
+    bulk_update_tables_status
+)
+from ..services.data_integrity import check_data_integrity, auto_fix_integrity_issues
 
 
 router = APIRouter()
@@ -161,28 +167,86 @@ async def update_location(
                 detail=f"Локация с названием '{location_data.name}' уже существует"
             )
     
-    # Обновляем поля
+    # Сохраняем текущий статус для проверки изменений
+    old_is_active = location.is_active
+    
+    # Если локация деактивируется, проверяем активные заказы
+    if 'is_active' in location_data.model_dump(exclude_unset=True):
+        new_is_active = location_data.is_active
+        
+        if old_is_active and not new_is_active:
+            # Проверяем наличие активных заказов
+            has_active_orders, active_orders_count = await check_location_has_active_orders(db, location_id)
+            
+            if has_active_orders:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Нельзя деактивировать локацию с активными заказами. "
+                           f"Найдено столиков с заказами: {active_orders_count}"
+                )
+    
+    # Обновляем поля локации
     update_data = location_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(location, field, value)
     
-    # ВАЖНО: Если локация деактивируется, деактивируем все столики в ней
-    if 'is_active' in update_data and not update_data['is_active']:
-        # Получаем все столики этой локации
-        tables_query = select(Table).where(Table.location_id == location_id)
-        tables_result = await db.execute(tables_query)
-        tables = tables_result.scalars().all()
-        
-        # Деактивируем каждый столик и сбрасываем его статус
-        for table in tables:
-            table.is_active = False
-            table.is_occupied = False
-            table.current_order_id = None
-    
     await db.commit()
     await db.refresh(location)
     
+    # Синхронизируем статус столиков, если изменился статус активности
+    if 'is_active' in update_data and update_data['is_active'] != old_is_active:
+        affected_tables = await sync_tables_with_location_status(
+            db=db,
+            location_id=location_id,
+            location_is_active=update_data['is_active'],
+            force_sync=False  # Не принудительно активируем столики при активации локации
+        )
+        
+        if affected_tables:
+            # Обновляем объект локации после синхронизации
+            await db.refresh(location)
+    
     return location
+
+
+@router.patch("/{location_id}/sync-tables", response_model=APIResponse)
+async def sync_location_tables(
+    location_id: int,
+    db: DatabaseSession,
+    admin_user: AdminUser,
+    force_activation: bool = Query(False, description="Принудительно активировать столики при активной локации")
+):
+    """
+    Принудительная синхронизация статуса столиков с локацией (только для администраторов)
+    """
+    # Проверяем существование локации
+    query = select(Location).where(Location.id == location_id)
+    result = await db.execute(query)
+    location = result.scalar_one_or_none()
+    
+    if not location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Локация не найдена"
+        )
+    
+    # Выполняем синхронизацию
+    affected_tables = await sync_tables_with_location_status(
+        db=db,
+        location_id=location_id,
+        location_is_active=location.is_active,
+        force_sync=force_activation
+    )
+    
+    if not affected_tables:
+        return APIResponse(
+            message=f"Все столики в локации '{location.name}' уже синхронизированы"
+        )
+    
+    return APIResponse(
+        message=f"Синхронизированы столики в локации '{location.name}'. "
+                f"Изменено столиков: {len(affected_tables)}"
+    )
 
 
 @router.get("/{location_id}/tables")
@@ -265,3 +329,33 @@ async def delete_location(
         return APIResponse(
             message=f"Локация '{location.name}' удалена"
         )
+
+
+@router.get("/admin/integrity-check", response_model=dict)
+async def check_locations_integrity(
+    db: DatabaseSession,
+    admin_user: AdminUser
+):
+    """
+    Проверка целостности данных локаций и столиков (только для администраторов)
+    """
+    integrity_report = await check_data_integrity(db)
+    return integrity_report
+
+
+@router.post("/admin/auto-fix", response_model=dict)
+async def auto_fix_locations_integrity(
+    db: DatabaseSession,
+    admin_user: AdminUser,
+    dry_run: bool = Query(True, description="Предварительный просмотр без применения изменений"),
+    fix_types: List[str] = Query(None, description="Типы проблем для исправления")
+):
+    """
+    Автоматическое исправление проблем целостности (только для администраторов)
+    """
+    fix_result = await auto_fix_integrity_issues(
+        db=db,
+        fix_types=fix_types,
+        dry_run=dry_run
+    )
+    return fix_result
