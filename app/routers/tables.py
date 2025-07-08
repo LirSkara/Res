@@ -98,6 +98,13 @@ async def create_table(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Указанная локация не найдена"
             )
+        
+        # ВАЖНО: Нельзя создать активный столик в неактивной локации
+        if not location.is_active and table_data.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя создать активный столик в неактивной локации"
+            )
     
     # Создаем столик с уникальным QR-кодом
     new_table = Table(
@@ -181,11 +188,37 @@ async def update_table(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Указанная локация не найдена"
             )
+        
+        # ВАЖНО: Нельзя активировать столик в неактивной локации
+        if not location.is_active and table_data.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя активировать столик в неактивной локации"
+            )
+    
+    # Дополнительная проверка: если активируется столик, проверяем его текущую локацию
+    if table_data.is_active and not table_data.location_id:
+        # Проверяем текущую локацию столика
+        if table.location_id:
+            current_location_query = select(Location).where(Location.id == table.location_id)
+            current_location_result = await db.execute(current_location_query)
+            current_location = current_location_result.scalar_one_or_none()
+            
+            if current_location and not current_location.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Нельзя активировать столик в неактивной локации"
+                )
     
     # Обновляем поля
     update_data = table_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(table, field, value)
+    
+    # ВАЖНО: Если столик деактивируется, автоматически сбрасываем статус занятости
+    if 'is_active' in update_data and not update_data['is_active']:
+        table.is_occupied = False
+        table.current_order_id = None
     
     await db.commit()
     await db.refresh(table)

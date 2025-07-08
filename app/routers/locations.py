@@ -166,6 +166,19 @@ async def update_location(
     for field, value in update_data.items():
         setattr(location, field, value)
     
+    # ВАЖНО: Если локация деактивируется, деактивируем все столики в ней
+    if 'is_active' in update_data and not update_data['is_active']:
+        # Получаем все столики этой локации
+        tables_query = select(Table).where(Table.location_id == location_id)
+        tables_result = await db.execute(tables_query)
+        tables = tables_result.scalars().all()
+        
+        # Деактивируем каждый столик и сбрасываем его статус
+        for table in tables:
+            table.is_active = False
+            table.is_occupied = False
+            table.current_order_id = None
+    
     await db.commit()
     await db.refresh(location)
     
