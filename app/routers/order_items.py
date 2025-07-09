@@ -12,6 +12,7 @@ from decimal import Decimal
 from ..deps import DatabaseSession, WaiterUser, KitchenUser, CurrentUser
 from ..models import OrderItem, Order, Dish
 from ..models.order_item import OrderItemStatus
+from ..models.user import UserRole
 from ..schemas import (
     OrderItem as OrderItemSchema, OrderItemCreate, OrderItemUpdate, 
     OrderItemWithDish, OrderItemStatusUpdate, APIResponse
@@ -42,11 +43,20 @@ async def add_item_to_order(
             detail="Заказ не найден"
         )
     
-    # Проверяем права доступа (официант может редактировать только свои заказы)
-    if waiter_user.role.value == "waiter" and order.waiter_id != waiter_user.id:
+    # Проверяем права доступа (официант может редактировать только свои заказы, админ - любые)
+    if waiter_user.role == UserRole.WAITER and order.waiter_id != waiter_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Вы можете редактировать только свои заказы"
+        )
+    
+    # Проверяем, можно ли добавлять блюда в заказ (только в активные заказы)
+    from ..models.order import OrderStatus
+    allowed_statuses = [OrderStatus.PENDING, OrderStatus.IN_PROGRESS]
+    if order.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Нельзя добавлять блюда в заказ со статусом '{order.status.value}'"
         )
     
     # Проверяем блюдо
@@ -126,7 +136,7 @@ async def add_item_to_order(
     db.add(new_item)
     
     # Обновляем общую стоимость заказа
-    order.total_price += item_total
+    order.total_price = Decimal(str(order.total_price)) + item_total
     
     await db.commit()
     await db.refresh(new_item)
@@ -282,7 +292,7 @@ async def remove_item_from_order(
         )
     
     # Проверяем права доступа
-    if (waiter_user.role.value == "waiter" and 
+    if (waiter_user.role == UserRole.WAITER and 
         item.order.waiter_id != waiter_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -290,7 +300,7 @@ async def remove_item_from_order(
         )
     
     # Обновляем общую стоимость заказа
-    item.order.total_price -= item.total
+    item.order.total_price = Decimal(str(item.order.total_price)) - Decimal(str(item.total))
     
     # Удаляем позицию
     await db.delete(item)
