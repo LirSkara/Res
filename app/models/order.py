@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .user import User
     from .dish import Dish
     from .order_item import OrderItem
+    from .paymentmethod import PaymentMethod
 
 
 class OrderStatus(str, enum.Enum):
@@ -67,16 +68,27 @@ class Order(Base):
     )
     
     # Связи
-    table_id: Mapped[int] = mapped_column(
+    table_id: Mapped[Optional[int]] = mapped_column(
         Integer, 
         ForeignKey("tables.id"), 
-        nullable=False
+        nullable=True  # Для доставки столик не нужен
     )
     waiter_id: Mapped[int] = mapped_column(
         Integer, 
         ForeignKey("users.id"), 
         nullable=False
     )
+    payment_method_id: Mapped[Optional[int]] = mapped_column(
+        Integer, 
+        ForeignKey("payment_methods.id"), 
+        nullable=True  # Заказ можно создать без способа оплаты
+    )
+    
+    # Поля для доставки
+    customer_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    customer_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_address: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     
     # Временные метки
     served_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -88,7 +100,7 @@ class Order(Base):
     kitchen_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
-    table: Mapped["Table"] = relationship(
+    table: Mapped[Optional["Table"]] = relationship(
         "Table", 
         back_populates="orders",
         foreign_keys=[table_id]
@@ -97,6 +109,10 @@ class Order(Base):
         "User", 
         back_populates="orders",
         foreign_keys=[waiter_id]
+    )
+    payment_method: Mapped[Optional["PaymentMethod"]] = relationship(
+        "PaymentMethod",
+        foreign_keys=[payment_method_id]
     )
     items: Mapped[List["OrderItem"]] = relationship(
         "OrderItem", 

@@ -40,8 +40,8 @@ from .dish_variation import (
 # Order schemas
 from .order import (
     Order, OrderCreate, OrderUpdate, OrderWithDetails,
-    OrderStatusUpdate, OrderPaymentUpdate, OrderList, OrderStats,
-    OrderWebSocketMessage
+    OrderStatusUpdate, OrderPaymentUpdate, OrderPaymentComplete, OrderList, OrderStats,
+    OrderWebSocketMessage, DeliveryOrderCreate, DeliveryOrderResponse
 )
 
 # Order Item schemas  
@@ -81,8 +81,8 @@ __all__ = [
     # Order
     "Order", "OrderCreate", "OrderUpdate", "OrderWithDetails",
     "OrderItem", "OrderItemCreate", "OrderItemUpdate", "OrderItemWithDish",
-    "OrderStatusUpdate", "OrderPaymentUpdate", "OrderList", "OrderStats",
-    "OrderWebSocketMessage",
+    "OrderStatusUpdate", "OrderPaymentUpdate", "OrderPaymentComplete", "OrderList", "OrderStats",
+    "OrderWebSocketMessage", "DeliveryOrderCreate", "DeliveryOrderResponse",
     
     # Misc
     "Ingredient", "IngredientCreate", "IngredientUpdate", "IngredientList",

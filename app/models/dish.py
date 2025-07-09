@@ -42,7 +42,6 @@ class Dish(Base):
     )
     
     # Дополнительная информация
-    main_image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Переименовано согласно ТЗ
     cooking_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # граммы
     calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # ккал
@@ -64,4 +63,4 @@ class Dish(Base):
     )
     
     def __repr__(self) -> str:
-        return f"<Dish(id={self.id}, name='{self.name}', price={self.price})>"
+        return f"<Dish(id={self.id}, name='{self.name}', available={self.is_available})>"

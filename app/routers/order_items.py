@@ -66,16 +66,60 @@ async def add_item_to_order(
             detail="Блюдо недоступно"
         )
     
+    # Получаем вариацию блюда для цены
+    from ..models import DishVariation
+    
+    if hasattr(item_data, 'dish_variation_id') and item_data.dish_variation_id:
+        # Конкретная вариация указана
+        variation_query = select(DishVariation).where(
+            DishVariation.id == item_data.dish_variation_id,
+            DishVariation.dish_id == dish.id,
+            DishVariation.is_available == True
+        )
+        variation_result = await db.execute(variation_query)
+        variation = variation_result.scalar_one_or_none()
+        
+        if not variation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Вариация блюда с ID {item_data.dish_variation_id} не найдена или недоступна"
+            )
+    else:
+        # Берем дефолтную вариацию
+        default_variation_query = select(DishVariation).where(
+            DishVariation.dish_id == dish.id,
+            DishVariation.is_default == True,
+            DishVariation.is_available == True
+        )
+        default_result = await db.execute(default_variation_query)
+        variation = default_result.scalar_one_or_none()
+        
+        if not variation:
+            # Если нет дефолтной, берем первую доступную
+            first_variation_query = select(DishVariation).where(
+                DishVariation.dish_id == dish.id,
+                DishVariation.is_available == True
+            ).limit(1)
+            first_result = await db.execute(first_variation_query)
+            variation = first_result.scalar_one_or_none()
+            
+            if not variation:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"У блюда '{dish.name}' нет доступных вариаций"
+                )
+    
     # Создаем новую позицию
-    item_total = Decimal(str(dish.price)) * item_data.quantity
+    item_total = Decimal(str(variation.price)) * item_data.quantity
     
     new_item = OrderItem(
         order_id=order_id,
         dish_id=item_data.dish_id,
+        dish_variation_id=variation.id,
         quantity=item_data.quantity,
-        price=Decimal(str(dish.price)),
+        price=Decimal(str(variation.price)),
         total=item_total,
-        comment=item_data.comment,
+        comment=getattr(item_data, 'comment', None),
         status=OrderItemStatus.NEW
     )
     
@@ -99,7 +143,7 @@ async def add_item_to_order(
     return OrderItemWithDish(
         **item_with_dish.__dict__,
         dish_name=item_with_dish.dish.name,
-        dish_image_url=item_with_dish.dish.image_url,
+        dish_image_url=item_with_dish.dish.main_image_url,
         dish_cooking_time=item_with_dish.dish.cooking_time
     )
 
@@ -168,7 +212,7 @@ async def update_order_item(
     return OrderItemWithDish(
         **item.__dict__,
         dish_name=item.dish.name,
-        dish_image_url=item.dish.image_url,
+        dish_image_url=item.dish.main_image_url,
         dish_cooking_time=item.dish.cooking_time
     )
 

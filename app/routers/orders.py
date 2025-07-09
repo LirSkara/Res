@@ -17,8 +17,8 @@ from ..models.order_item import OrderItemStatus
 from ..schemas import (
     Order as OrderSchema, OrderCreate, OrderUpdate, OrderWithDetails,
     OrderItem as OrderItemSchema, OrderItemCreate, OrderItemUpdate, 
-    OrderItemWithDish, OrderStatusUpdate, OrderPaymentUpdate,
-    OrderList, OrderStats, APIResponse
+    OrderItemWithDish, OrderStatusUpdate, OrderPaymentUpdate, OrderPaymentComplete,
+    OrderList, OrderStats, APIResponse, DeliveryOrderCreate, DeliveryOrderResponse
 )
 
 
@@ -42,6 +42,7 @@ async def get_orders(
     query = select(Order).options(
         selectinload(Order.table),
         selectinload(Order.waiter),
+        selectinload(Order.payment_method),
         selectinload(Order.items).selectinload(OrderItem.dish)
     )
     
@@ -242,6 +243,7 @@ async def create_order(
         full_order_query = select(Order).options(
             selectinload(Order.table),
             selectinload(Order.waiter),
+            selectinload(Order.payment_method),
             selectinload(Order.items).selectinload(OrderItem.dish)
         ).where(Order.id == new_order.id)
         
@@ -258,6 +260,7 @@ async def create_order(
             kitchen_notes=full_order.kitchen_notes,
             status=full_order.status,
             payment_status=full_order.payment_status,
+            payment_method_id=full_order.payment_method_id,
             total_price=full_order.total_price,
             served_at=full_order.served_at,
             cancelled_at=full_order.cancelled_at,
@@ -266,6 +269,7 @@ async def create_order(
             updated_at=full_order.updated_at,
             table_number=full_order.table.number if full_order.table else None,
             waiter_name=full_order.waiter.full_name if full_order.waiter else "Не указан",
+            payment_method_name=full_order.payment_method.name if full_order.payment_method else None,
             items=[
                 OrderItemWithDish(
                     id=item.id,
@@ -314,6 +318,7 @@ async def get_order(
     query = select(Order).options(
         selectinload(Order.table),
         selectinload(Order.waiter),
+        selectinload(Order.payment_method),
         selectinload(Order.items).selectinload(OrderItem.dish)
     ).where(Order.id == order_id)
     
@@ -332,6 +337,7 @@ async def get_order(
         **order_dict,
         table_number=order.table.number if order.table else None,
         waiter_name=order.waiter.full_name if order.waiter else "Не указан",
+        payment_method_name=order.payment_method.name if order.payment_method else None,
         items=[
             OrderItemWithDish(
                 **item.__dict__,
@@ -435,6 +441,24 @@ async def update_order_payment_status(
             detail="Заказ не найден"
         )
     
+    # Проверяем способ оплаты если он указан
+    if payment_data.payment_method_id:
+        from ..models import PaymentMethod
+        payment_method_query = select(PaymentMethod).where(
+            PaymentMethod.id == payment_data.payment_method_id,
+            PaymentMethod.is_active == True
+        )
+        payment_method_result = await db.execute(payment_method_query)
+        payment_method = payment_method_result.scalar_one_or_none()
+        
+        if not payment_method:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Способ оплаты не найден или неактивен"
+            )
+        
+        order.payment_method_id = payment_data.payment_method_id
+    
     order.payment_status = payment_data.payment_status
     await db.commit()
     
@@ -446,6 +470,57 @@ async def update_order_payment_status(
     
     return APIResponse(
         message=f"Статус оплаты заказа #{order.id}: {payment_names[payment_data.payment_status]}"
+    )
+
+
+@router.post("/{order_id}/complete-payment", response_model=APIResponse)
+async def complete_order_payment(
+    order_id: int,
+    payment_data: OrderPaymentComplete,
+    db: DatabaseSession,
+    waiter_user: WaiterUser
+):
+    """
+    Завершить оплату заказа с указанием способа оплаты
+    """
+    query = select(Order).where(Order.id == order_id)
+    result = await db.execute(query)
+    order = result.scalar_one_or_none()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Заказ не найден"
+        )
+    
+    if order.payment_status == PaymentStatus.PAID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Заказ уже оплачен"
+        )
+    
+    # Проверяем способ оплаты
+    from ..models import PaymentMethod
+    payment_method_query = select(PaymentMethod).where(
+        PaymentMethod.id == payment_data.payment_method_id,
+        PaymentMethod.is_active == True
+    )
+    payment_method_result = await db.execute(payment_method_query)
+    payment_method = payment_method_result.scalar_one_or_none()
+    
+    if not payment_method:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Способ оплаты не найден или неактивен"
+        )
+    
+    # Обновляем заказ
+    order.payment_method_id = payment_data.payment_method_id
+    order.payment_status = payment_data.payment_status
+    await db.commit()
+    
+    return APIResponse(
+        message=f"Заказ #{order.id} успешно оплачен способом '{payment_method.name}'"
     )
 
 
@@ -524,6 +599,196 @@ async def get_order_stats(
         average_order_value=average_order_value,
         average_cooking_time=int(avg_cooking_time) if avg_cooking_time else None
     )
+
+
+@router.post("/delivery", response_model=DeliveryOrderResponse, status_code=status.HTTP_201_CREATED)
+async def create_delivery_order(
+    order_data: DeliveryOrderCreate,
+    db: DatabaseSession,
+    waiter_user: WaiterUser
+):
+    """
+    Создать новый заказ с доставкой (для официантов и администраторов)
+    """
+    try:
+        # Для доставки не нужен столик, но проверяем блюда
+        total_price = Decimal('0.00')
+        validated_items = []
+        
+        for item_data in order_data.items:
+            dish_query = select(Dish).where(Dish.id == item_data.dish_id)
+            dish_result = await db.execute(dish_query)
+            dish = dish_result.scalar_one_or_none()
+            
+            if not dish:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Блюдо с ID {item_data.dish_id} не найдено"
+                )
+            
+            if not dish.is_available:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Блюдо '{dish.name}' недоступно"
+                )
+            
+            # Получаем вариацию блюда для цены
+            from ..models import DishVariation
+            
+            if hasattr(item_data, 'dish_variation_id') and item_data.dish_variation_id:
+                # Конкретная вариация указана
+                variation_query = select(DishVariation).where(
+                    DishVariation.id == item_data.dish_variation_id,
+                    DishVariation.dish_id == dish.id,
+                    DishVariation.is_available == True
+                )
+                variation_result = await db.execute(variation_query)
+                variation = variation_result.scalar_one_or_none()
+                
+                if not variation:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Вариация блюда с ID {item_data.dish_variation_id} не найдена или недоступна"
+                    )
+            else:
+                # Берем дефолтную вариацию
+                default_variation_query = select(DishVariation).where(
+                    DishVariation.dish_id == dish.id,
+                    DishVariation.is_default == True,
+                    DishVariation.is_available == True
+                )
+                default_result = await db.execute(default_variation_query)
+                variation = default_result.scalar_one_or_none()
+                
+                if not variation:
+                    # Если нет дефолтной, берем первую доступную
+                    first_variation_query = select(DishVariation).where(
+                        DishVariation.dish_id == dish.id,
+                        DishVariation.is_available == True
+                    ).limit(1)
+                    first_result = await db.execute(first_variation_query)
+                    variation = first_result.scalar_one_or_none()
+                    
+                    if not variation:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"У блюда '{dish.name}' нет доступных вариаций"
+                        )
+            
+            item_total = Decimal(str(variation.price)) * item_data.quantity
+            total_price += item_total
+            
+            validated_items.append({
+                'dish': dish,
+                'variation': variation,
+                'quantity': item_data.quantity,
+                'price': Decimal(str(variation.price)),
+                'total': item_total,
+                'comment': getattr(item_data, 'comment', None)
+            })
+        
+        # Создаем заказ с доставкой
+        new_order = Order(
+            table_id=None,  # Для доставки столик не нужен
+            waiter_id=waiter_user.id,
+            order_type=OrderType.DELIVERY,
+            notes=order_data.notes,
+            kitchen_notes=order_data.kitchen_notes,
+            total_price=total_price,
+            status=OrderStatus.PENDING,
+            payment_status=PaymentStatus.UNPAID,
+            # Данные клиента для доставки
+            customer_name=order_data.customer_name,
+            customer_phone=order_data.customer_phone,
+            delivery_address=order_data.delivery_address,
+            delivery_notes=order_data.delivery_notes
+        )
+        
+        db.add(new_order)
+        await db.commit()
+        await db.refresh(new_order)
+        
+        # Создаем позиции заказа
+        order_items = []
+        for item_data in validated_items:
+            order_item = OrderItem(
+                order_id=new_order.id,
+                dish_id=item_data['dish'].id,
+                dish_variation_id=item_data['variation'].id,
+                quantity=item_data['quantity'],
+                price=item_data['price'],
+                total=item_data['total'],
+                comment=item_data.get('comment'),
+                status=OrderItemStatus.NEW
+            )
+            db.add(order_item)
+            order_items.append(order_item)
+        
+        await db.commit()
+        
+        # Загружаем заказ с полной информацией
+        full_order_query = select(Order).options(
+            selectinload(Order.waiter),
+            selectinload(Order.items).selectinload(OrderItem.dish)
+        ).where(Order.id == new_order.id)
+        
+        full_order_result = await db.execute(full_order_query)
+        full_order = full_order_result.scalar_one()
+        
+        # Формируем ответ с детальной информацией
+        order_response = DeliveryOrderResponse(
+            id=full_order.id,
+            waiter_id=full_order.waiter_id,
+            order_type=full_order.order_type,
+            status=full_order.status,
+            payment_status=full_order.payment_status,
+            total_price=full_order.total_price,
+            notes=full_order.notes,
+            kitchen_notes=full_order.kitchen_notes,
+            customer_name=full_order.customer_name,
+            customer_phone=full_order.customer_phone,
+            delivery_address=full_order.delivery_address,
+            delivery_notes=full_order.delivery_notes,
+            served_at=full_order.served_at,
+            cancelled_at=full_order.cancelled_at,
+            time_to_serve=full_order.time_to_serve,
+            created_at=full_order.created_at,
+            updated_at=full_order.updated_at,
+            waiter_name=full_order.waiter.full_name if full_order.waiter else "Не указан",
+            items=[
+                OrderItemWithDish(
+                    id=item.id,
+                    dish_id=item.dish_id,
+                    order_id=item.order_id,
+                    quantity=item.quantity,
+                    price=item.price,
+                    total=item.total,
+                    comment=item.comment,
+                    status=item.status,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
+                    dish_image_url=item.dish.main_image_url if item.dish else None,
+                    dish_cooking_time=item.dish.cooking_time if item.dish else None
+                )
+                for item in full_order.items
+            ]
+        )
+        
+        return order_response
+        
+    except HTTPException:
+        # Перебрасываем HTTP исключения как есть
+        raise
+    except Exception as e:
+        # Логируем неожиданные ошибки
+        print(f"Error creating delivery order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка создания заказа с доставкой: {str(e)}"
+        )
 
 
 @router.delete("/{order_id}", response_model=APIResponse)
