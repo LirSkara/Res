@@ -264,8 +264,8 @@ async def create_order(
             time_to_serve=full_order.time_to_serve,
             created_at=full_order.created_at,
             updated_at=full_order.updated_at,
-            table_number=full_order.table.number,
-            waiter_name=full_order.waiter.full_name,
+            table_number=full_order.table.number if full_order.table else None,
+            waiter_name=full_order.waiter.full_name if full_order.waiter else "Не указан",
             items=[
                 OrderItemWithDish(
                     id=item.id,
@@ -278,9 +278,9 @@ async def create_order(
                     status=item.status,
                     created_at=item.created_at,
                     updated_at=item.updated_at,
-                    dish_name=item.dish.name,
-                    dish_image_url=item.dish.main_image_url,
-                    dish_cooking_time=item.dish.cooking_time
+                    dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
+                    dish_image_url=item.dish.main_image_url if item.dish else None,
+                    dish_cooking_time=item.dish.cooking_time if item.dish else None
                 )
                 for item in full_order.items
             ]
@@ -327,16 +327,17 @@ async def get_order(
         )
     
     # Формируем ответ с детальной информацией
+    order_dict = {k: v for k, v in order.__dict__.items() if k != 'items'}
     order_response = OrderWithDetails(
-        **order.__dict__,
-        table_number=order.table.number,
-        waiter_name=order.waiter.full_name,
+        **order_dict,
+        table_number=order.table.number if order.table else None,
+        waiter_name=order.waiter.full_name if order.waiter else "Не указан",
         items=[
             OrderItemWithDish(
                 **item.__dict__,
-                dish_name=item.dish.name,
-                dish_image_url=item.dish.main_image_url,
-                dish_cooking_time=item.dish.cooking_time
+                dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
+                dish_image_url=item.dish.main_image_url if item.dish else None,
+                dish_cooking_time=item.dish.cooking_time if item.dish else None
             )
             for item in order.items
         ]
