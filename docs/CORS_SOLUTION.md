@@ -3,10 +3,13 @@
 ## Проблема
 FastAPI приложение не работало с конкретными CORS origins при указании в настройках `settings.cors_origins`, но работало с wildcard `allow_origins=["*"]`. При попытке указать конкретные домены фронтенда, сервер отвечал "Disallowed CORS origin" на preflight запросы.
 
+**ОБНОВЛЕНИЕ 13.07.2025**: Обнаружена дополнительная проблема с PATCH запросами - метод PATCH не был включен в список разрешенных методов `allow_methods`, что вызывало ошибку 400 на preflight запросах для эндпоинтов обновления статусов.
+
 ## Причины проблемы
 1. **Неправильный формат в .env файле** - использовался JSON формат `["origin1", "origin2"]` вместо строки с запятыми
 2. **Конфликт парсинга Pydantic** - автоматический парсинг List[str] пытался интерпретировать строку как JSON
 3. **Отсутствие нужных URL-адресов** - не было указано `http://localhost:5173` для Vite dev server
+4. **ОТСУТСТВИЕ PATCH МЕТОДА** - метод PATCH не был включен в `allow_methods`, что блокировало все PATCH запросы на изменение статусов
 
 ## Решение
 
@@ -74,9 +77,20 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,  # Используем настройки из конфига
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],  # ✅ PATCH добавлен!
+    allow_headers=[
+        "Authorization",
+        "Content-Type", 
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "X-CSRF-Token"
+    ],
+    expose_headers=[
+        "Content-Length",
+        "X-Total-Count",
+        "X-Page-Count"
+    ]
 )
 ```
 
@@ -95,7 +109,7 @@ async def debug_cors(request: Request):
         "origin_allowed": origin in settings.cors_origins,
         "cors_config": {
             "allow_credentials": True,
-            "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["*"],
             "expose_headers": ["*"]
         },

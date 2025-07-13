@@ -105,7 +105,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,  # Используем настройки из конфига
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Ограничиваем методы
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],  # ИСПРАВЛЕНО: Добавлен PATCH метод
     # ИСПРАВЛЕНО: Конкретные заголовки вместо wildcard для безопасности
     allow_headers=[
         "Authorization",      # Токены авторизации
