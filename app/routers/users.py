@@ -274,6 +274,58 @@ async def update_user(
                 detail="Пользователь с таким PIN-кодом уже существует"
             )
     
+    # Проверка: администратор не может деактивировать сам себя
+    if (user_update.is_active is not None and 
+        user_update.is_active is False and 
+        user.id == current_user.id and 
+        user.role == UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Администратор не может деактивировать сам себя"
+        )
+    
+    # Проверка: нельзя деактивировать последнего администратора
+    if (user_update.is_active is not None and 
+        user_update.is_active is False and 
+        user.role == UserRole.ADMIN):
+        
+        # Подсчитываем количество активных администраторов
+        active_admins_count = await db.execute(
+            select(func.count(User.id)).where(
+                User.role == UserRole.ADMIN,
+                User.is_active == True,
+                User.id != user_id  # Исключаем текущего пользователя
+            )
+        )
+        remaining_admins = active_admins_count.scalar()
+        
+        if remaining_admins == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя деактивировать последнего активного администратора"
+            )
+    
+    # Проверка: нельзя изменить роль последнего администратора
+    if (user_update.role is not None and 
+        user_update.role != UserRole.ADMIN and 
+        user.role == UserRole.ADMIN):
+        
+        # Подсчитываем количество активных администраторов
+        active_admins_count = await db.execute(
+            select(func.count(User.id)).where(
+                User.role == UserRole.ADMIN,
+                User.is_active == True,
+                User.id != user_id  # Исключаем текущего пользователя
+            )
+        )
+        remaining_admins = active_admins_count.scalar()
+        
+        if remaining_admins == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя изменить роль последнего активного администратора"
+            )
+    
     # Обновление полей
     update_data = user_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -350,6 +402,24 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
         )
+    
+    # Проверка: нельзя удалить последнего администратора
+    if user.role == UserRole.ADMIN:
+        # Подсчитываем количество активных администраторов
+        active_admins_count = await db.execute(
+            select(func.count(User.id)).where(
+                User.role == UserRole.ADMIN,
+                User.is_active == True,
+                User.id != user_id  # Исключаем текущего пользователя
+            )
+        )
+        remaining_admins = active_admins_count.scalar()
+        
+        if remaining_admins == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя удалить последнего активного администратора"
+            )
     
     # Деактивация вместо удаления
     user.is_active = False

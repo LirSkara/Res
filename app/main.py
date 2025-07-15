@@ -280,11 +280,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """Обработка ошибок валидации"""
     error_details = exc.errors()
     
+    # Преобразуем error_details для безопасного логирования
+    safe_error_details = []
+    for error in error_details:
+        safe_error = {
+            "type": error.get("type"),
+            "loc": error.get("loc"),
+            "msg": error.get("msg"),
+            "input": str(error.get("input")) if error.get("input") is not None else None,
+            "url": error.get("url")
+        }
+        safe_error_details.append(safe_error)
+    
     # Логируем ошибки валидации для анализа
     error_logger.warning(
         f"Ошибка валидации: {request.method} {request.url} | "
         f"Client: {request.client.host if request.client else 'unknown'} | "
-        f"Errors: {error_details}"
+        f"Errors: {safe_error_details}"
     )
     
     return JSONResponse(
@@ -292,7 +304,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content=ErrorResponse(
             message="Ошибка валидации данных",
             error_code="VALIDATION_ERROR",
-            details={"errors": error_details}
+            details={"errors": safe_error_details}
         ).model_dump()
     )
 
