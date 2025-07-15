@@ -45,6 +45,7 @@ class Order(OrderBase):
     total_price: Decimal
     served_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     time_to_serve: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -85,9 +86,10 @@ class OrderStats(BaseModel):
     """Схема статистики заказов"""
     total_orders: int = 0
     pending_orders: int = 0
-    in_progress_orders: int = 0
     ready_orders: int = 0
     served_orders: int = 0
+    dining_orders: int = 0
+    completed_orders: int = 0
     cancelled_orders: int = 0
     total_revenue: Decimal = Decimal('0.00')
     average_order_value: Decimal = Decimal('0.00')

@@ -76,7 +76,7 @@ class OrderService:
         # Проверяем, нет ли уже активного заказа
         existing_order_query = select(Order).where(
             Order.table_id == table_id,
-            Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
+            Order.status.in_([OrderStatus.PENDING, OrderStatus.READY, OrderStatus.SERVED, OrderStatus.DINING])
         )
         existing_order_result = await db.execute(existing_order_query)
         existing_order = existing_order_result.scalar_one_or_none()

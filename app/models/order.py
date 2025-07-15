@@ -21,9 +21,10 @@ if TYPE_CHECKING:
 class OrderStatus(str, enum.Enum):
     """Статусы заказа"""
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
     READY = "ready"
     SERVED = "served"
+    DINING = "dining"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
@@ -93,6 +94,7 @@ class Order(Base):
     # Временные метки
     served_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
     time_to_serve: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
     
     # Комментарии

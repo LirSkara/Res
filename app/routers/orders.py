@@ -373,8 +373,8 @@ async def update_order_status(
         )
     
     # Проверяем права на изменение статуса
-    if status_data.status in [OrderStatus.IN_PROGRESS, OrderStatus.READY]:
-        # Кухня может менять статус на "готовится" и "готов"
+    if status_data.status == OrderStatus.READY:
+        # Кухня может менять статус на "готов"
         if current_user.role.value not in ['kitchen', 'admin']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -387,6 +387,20 @@ async def update_order_status(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Только официанты могут отмечать заказ как поданный"
             )
+    elif status_data.status == OrderStatus.DINING:
+        # Официанты могут переводить в статус "клиенты едят"
+        if current_user.role.value not in ['waiter', 'admin']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Только официанты могут переводить заказ в статус 'клиенты едят'"
+            )
+    elif status_data.status == OrderStatus.COMPLETED:
+        # Официанты могут завершать заказ
+        if current_user.role.value not in ['waiter', 'admin']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Только официанты могут завершать заказ"
+            )
     
     old_status = order.status
     order.status = status_data.status
@@ -395,24 +409,31 @@ async def update_order_status(
     if status_data.status == OrderStatus.SERVED and old_status != OrderStatus.SERVED:
         order.served_at = datetime.utcnow()
         order.time_to_serve = int((order.served_at - order.created_at).total_seconds() / 60)
-        
-        # Освобождаем столик
-        order.table.is_occupied = False
-        order.table.current_order_id = None
+        # Столик НЕ освобождается - клиенты еще едят
+    
+    # Столик освобождается только при завершении или отмене заказа
+    elif status_data.status == OrderStatus.COMPLETED:
+        # Освобождаем столик при завершении заказа
+        order.completed_at = datetime.utcnow()
+        if order.table:
+            order.table.is_occupied = False
+            order.table.current_order_id = None
     
     # При отмене заказа также освобождаем столик
     elif status_data.status == OrderStatus.CANCELLED:
         order.cancelled_at = datetime.utcnow()
-        order.table.is_occupied = False
-        order.table.current_order_id = None
+        if order.table:
+            order.table.is_occupied = False
+            order.table.current_order_id = None
     
     await db.commit()
     
     status_names = {
         OrderStatus.PENDING: "ожидает",
-        OrderStatus.IN_PROGRESS: "готовится",
         OrderStatus.READY: "готов",
         OrderStatus.SERVED: "подан",
+        OrderStatus.DINING: "клиенты едят",
+        OrderStatus.COMPLETED: "завершен",
         OrderStatus.CANCELLED: "отменен"
     }
     
