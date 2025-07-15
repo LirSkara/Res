@@ -54,9 +54,7 @@ async def get_dashboard_stats(
     total_revenue = float(revenue_result.scalar() or 0)
     
     # Получаем количество активных столов
-    from app.models.table import TableStatus
     active_tables_query = select(func.count(Table.id)).where(
-        Table.status == TableStatus.OCCUPIED,
         Table.is_active == True
     )
     active_tables_result = await db.execute(active_tables_query)
@@ -73,12 +71,12 @@ async def get_dashboard_stats(
     total_categories = total_categories_result.scalar() or 0
     
     # Получаем количество блюд
-    total_dishes_query = select(func.count(Dish.id)).where(Dish.is_active == True)
+    total_dishes_query = select(func.count(Dish.id)).where(Dish.is_available == True)
     total_dishes_result = await db.execute(total_dishes_query)
     total_dishes = total_dishes_result.scalar() or 0
     
     # Получаем количество ингредиентов
-    total_ingredients_query = select(func.count(Ingredient.id)).where(Ingredient.is_active == True)
+    total_ingredients_query = select(func.count(Ingredient.id))
     total_ingredients_result = await db.execute(total_ingredients_query)
     total_ingredients = total_ingredients_result.scalar() or 0
     
