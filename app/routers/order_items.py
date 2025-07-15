@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from decimal import Decimal
+from datetime import datetime
 
 from ..deps import DatabaseSession, WaiterUser, KitchenUser, CurrentUser
 from ..models import OrderItem, Order, Dish
@@ -130,7 +131,8 @@ async def add_item_to_order(
         price=Decimal(str(variation.price)),
         total=item_total,
         comment=getattr(item_data, 'comment', None),
-        status=OrderItemStatus.NEW
+        status=OrderItemStatus.IN_PREPARATION,
+        preparation_started_at=datetime.utcnow()
     )
     
     db.add(new_item)

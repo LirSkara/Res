@@ -4,7 +4,9 @@ QRes OS 4 - User Model
 """
 from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
+from datetime import datetime
 import enum
 
 from ..database import Base
@@ -50,7 +52,18 @@ class User(Base):
     )
     
     # Временные метки
-    last_login: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
+    )
     
     # Relationships
     created_by: Mapped[Optional["User"]] = relationship(

@@ -11,6 +11,7 @@ from datetime import datetime
 
 from ..models import Order, OrderItem, Table, Dish, User
 from ..models.order import OrderStatus, PaymentStatus
+from ..models.order_item import OrderItemStatus
 
 
 class OrderService:
@@ -55,7 +56,9 @@ class OrderService:
                 'quantity': item['quantity'],
                 'price': Decimal(str(dish.price)),
                 'total': item_total,
-                'comment': item.get('comment')
+                'comment': item.get('comment'),
+                'department': dish.department,
+                'estimated_preparation_time': dish.cooking_time
             })
         
         return validated_items

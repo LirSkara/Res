@@ -4,8 +4,10 @@ QRes OS 4 - OrderItem Model
 """
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, TYPE_CHECKING
 from decimal import Decimal
+from datetime import datetime
 import enum
 
 from ..database import Base
@@ -18,11 +20,22 @@ if TYPE_CHECKING:
 
 class OrderItemStatus(str, enum.Enum):
     """Статусы позиций заказа"""
-    NEW = "new"
-    COOKING = "cooking"
-    READY = "ready"
-    SERVED = "served"
-    CANCELLED = "cancelled"
+    NEW = "new"                      # Новая позиция
+    SENT_TO_KITCHEN = "sent_to_kitchen"  # Отправлена на кухню
+    IN_PREPARATION = "in_preparation"    # Готовится
+    READY = "ready"                  # Готова к подаче
+    SERVED = "served"                # Подана
+    CANCELLED = "cancelled"          # Отменена
+
+
+class KitchenDepartment(str, enum.Enum):
+    """Кухонные цехи"""
+    BAR = "bar"              # Бар (напитки)
+    COLD_KITCHEN = "cold"    # Холодный цех (салаты, закуски)
+    HOT_KITCHEN = "hot"      # Горячий цех (основные блюда)
+    DESSERT = "dessert"      # Кондитерский цех
+    GRILL = "grill"          # Гриль
+    BAKERY = "bakery"        # Выпечка
 
 
 class OrderItem(Base):
@@ -39,8 +52,37 @@ class OrderItem(Base):
     # Статус
     status: Mapped[OrderItemStatus] = mapped_column(
         SQLEnum(OrderItemStatus), 
-        default=OrderItemStatus.NEW, 
+        default=OrderItemStatus.IN_PREPARATION, 
         nullable=False
+    )
+    
+    # Кухонный цех
+    department: Mapped[KitchenDepartment] = mapped_column(
+        SQLEnum(KitchenDepartment), 
+        nullable=False
+    )
+    
+    # Временные метки
+    sent_to_kitchen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    preparation_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    served_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Время приготовления (минуты)
+    estimated_preparation_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actual_preparation_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # рассчитывается автоматически
+    
+    # Стандартные временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
     )
     
     # Связи

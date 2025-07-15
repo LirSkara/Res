@@ -228,7 +228,10 @@ async def create_order(
                 price=item_data['price'],
                 total=item_data['total'],
                 comment=item_data.get('comment'),
-                status=OrderItemStatus.NEW
+                status=OrderItemStatus.IN_PREPARATION,
+                department=item_data['department'],
+                estimated_preparation_time=item_data['estimated_preparation_time'],
+                preparation_started_at=datetime.utcnow()
             )
             db.add(order_item)
             order_items.append(order_item)
@@ -740,7 +743,10 @@ async def create_delivery_order(
                 price=item_data['price'],
                 total=item_data['total'],
                 comment=item_data.get('comment'),
-                status=OrderItemStatus.NEW
+                status=OrderItemStatus.IN_PREPARATION,
+                department=item_data['department'],
+                estimated_preparation_time=item_data['estimated_preparation_time'],
+                preparation_started_at=datetime.utcnow()
             )
             db.add(order_item)
             order_items.append(order_item)

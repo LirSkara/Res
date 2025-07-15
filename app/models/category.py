@@ -2,9 +2,11 @@
 QRes OS 4 - Category Model
 Модель категории блюд
 """
-from sqlalchemy import String, Boolean, Integer
+from sqlalchemy import String, Boolean, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
+from datetime import datetime
 
 from ..database import Base
 
@@ -26,6 +28,19 @@ class Category(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     color: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # Цвет категории (например, #e74c3c)
     featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Отмечена ли категория как особая
+    
+    # Стандартные временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
+    )
     
     # Relationships
     dishes: Mapped[List["Dish"]] = relationship(

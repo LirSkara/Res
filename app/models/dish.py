@@ -2,17 +2,21 @@
 QRes OS 4 - Dish Model
 Модель блюда
 """
-from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text
+from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, Enum as SQLEnum, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
 from decimal import Decimal
+from datetime import datetime
 
 from ..database import Base
 
 if TYPE_CHECKING:
     from .category import Category
-    from .order_item import OrderItem
+    from .order_item import OrderItem, KitchenDepartment
     from .dish_variation import DishVariation
+else:
+    from .order_item import KitchenDepartment
 
 
 class Dish(Base):
@@ -46,6 +50,26 @@ class Dish(Base):
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # граммы
     calories: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # ккал
     ingredients: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Кухонный цех
+    department: Mapped[KitchenDepartment] = mapped_column(
+        SQLEnum(KitchenDepartment), 
+        default=KitchenDepartment.HOT_KITCHEN,
+        nullable=False
+    )
+    
+    # Стандартные временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
+    )
     
     # Relationships
     category_obj: Mapped["Category"] = relationship(

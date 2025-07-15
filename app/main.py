@@ -27,7 +27,7 @@ from .input_validation import InputSanitizer  # Импорт санитизат�
 from .routers import (
     auth, users, tables, locations, categories, dishes, 
     orders, order_items, ingredients, 
-    paymentmethod, websocket
+    paymentmethod, websocket, kitchen
 )
 
 # Настройка логгера для ошибок
@@ -436,6 +436,7 @@ app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(order_items.router, prefix="/orders", tags=["Order Items"])
 app.include_router(ingredients.router, prefix="/ingredients", tags=["Ingredients"])
 app.include_router(paymentmethod.router, prefix="/payment-methods", tags=["Payment Methods"])
+app.include_router(kitchen.router, tags=["Kitchen"])
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 
 

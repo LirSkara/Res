@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, validator
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+from ..models.order_item import KitchenDepartment
 
 
 class DishBase(BaseModel):
@@ -22,6 +23,7 @@ class DishBase(BaseModel):
     sort_order: int = Field(default=0)
     is_popular: bool = Field(default=False)
     is_available: bool = True
+    department: KitchenDepartment = KitchenDepartment.HOT_KITCHEN
 
 
 class DishCreate(DishBase):
@@ -43,6 +45,7 @@ class DishUpdate(BaseModel):
     sort_order: Optional[int] = None
     is_popular: Optional[bool] = None
     is_available: Optional[bool] = None
+    department: Optional[KitchenDepartment] = None
 
 
 class Dish(DishBase):
@@ -50,6 +53,7 @@ class Dish(DishBase):
     model_config = ConfigDict(from_attributes=True)
     
     id: int
+    department: KitchenDepartment
     created_at: datetime
     updated_at: datetime
 

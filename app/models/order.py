@@ -4,8 +4,10 @@ QRes OS 4 - Order Models
 """
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
 from decimal import Decimal
+from datetime import datetime
 import enum
 
 from ..database import Base
@@ -92,10 +94,22 @@ class Order(Base):
     delivery_notes: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     
     # Временные метки
-    served_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    cancelled_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    served_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     time_to_serve: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
+    )
     
     # Комментарии
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -2,10 +2,12 @@
 QRes OS 4 - DishVariation Model
 Модель вариации блюда (размеры, добавки, варианты)
 """
-from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text
+from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
 from decimal import Decimal
+from datetime import datetime
 
 from ..database import Base
 
@@ -39,6 +41,19 @@ class DishVariation(Base):
     
     # Учёт
     sku: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    
+    # Стандартные временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
+    )
     
     # Связи
     dish_id: Mapped[int] = mapped_column(

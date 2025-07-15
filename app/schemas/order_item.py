@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
-from ..models.order_item import OrderItemStatus
+from ..models.order_item import OrderItemStatus, KitchenDepartment
 
 
 class OrderItemBase(BaseModel):
@@ -39,6 +39,18 @@ class OrderItem(OrderItemBase):
     price: Decimal
     total: Decimal
     status: OrderItemStatus
+    department: KitchenDepartment
+    
+    # Временные метки
+    sent_to_kitchen_at: Optional[datetime] = None
+    preparation_started_at: Optional[datetime] = None
+    ready_at: Optional[datetime] = None
+    served_at: Optional[datetime] = None
+    
+    # Время приготовления
+    estimated_preparation_time: Optional[int] = None
+    actual_preparation_time: Optional[int] = None
+    
     created_at: datetime
     updated_at: datetime
 
@@ -48,6 +60,28 @@ class OrderItemWithDish(OrderItem):
     dish_name: str
     dish_image_url: Optional[str] = None
     dish_cooking_time: Optional[int] = None
+    dish_department: KitchenDepartment
+
+
+class OrderItemStatusUpdate(BaseModel):
+    """Схема обновления статуса позиции заказа"""
+    status: OrderItemStatus
+
+
+class KitchenOrderItem(BaseModel):
+    """Схема позиции заказа для кухни"""
+    id: int
+    order_id: int
+    table_number: Optional[int] = None
+    dish_name: str
+    dish_image_url: Optional[str] = None
+    quantity: int
+    comment: Optional[str] = None
+    status: OrderItemStatus
+    department: KitchenDepartment
+    estimated_preparation_time: Optional[int] = None
+    sent_to_kitchen_at: Optional[datetime] = None
+    created_at: datetime
 
 
 class OrderItemStatusUpdate(BaseModel):

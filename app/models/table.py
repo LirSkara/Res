@@ -2,9 +2,11 @@
 QRes OS 4 - Table Model
 Модель столика ресторана
 """
-from sqlalchemy import String, Boolean, Integer, ForeignKey
+from sqlalchemy import String, Boolean, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
+from datetime import datetime
 import uuid
 
 from ..database import Base
@@ -47,6 +49,19 @@ class Table(Base):
         Integer, 
         ForeignKey("orders.id"), 
         nullable=True
+    )
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp()
     )
     
     # Relationships
