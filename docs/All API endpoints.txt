@@ -78,7 +78,9 @@ PATCH /payment-methods/{payment_method_id} - Обновить способ оп�
 DELETE /payment-methods/{payment_method_id} - Деактивировать способ оплаты (админ)
 🔄 WebSocket (/ws)
 WS /ws/orders - WebSocket для real-time уведомлений
+📊 Dashboard (/dashboard)
+GET /dashboard/stats - Получить статистику для дашборда (админ)
 🏠 System
 GET / - Корневой endpoint
 GET /health - Проверка состояния системы
-Итого: 64 API endpoints
+Итого: 65 API endpoints
