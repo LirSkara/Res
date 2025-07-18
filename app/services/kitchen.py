@@ -83,10 +83,10 @@ class KitchenService:
         current_time = datetime.utcnow()
         
         # Устанавливаем временные метки
-        if new_status == OrderItemStatus.SENT_TO_KITCHEN:
-            item.sent_to_kitchen_at = current_time
-        elif new_status == OrderItemStatus.IN_PREPARATION:
-            item.preparation_started_at = current_time
+        if new_status == OrderItemStatus.IN_PREPARATION:
+            # Если еще не было установлено время начала приготовления
+            if not item.preparation_started_at:
+                item.preparation_started_at = current_time
         elif new_status == OrderItemStatus.READY:
             item.ready_at = current_time
             # Рассчитываем время приготовления
@@ -131,7 +131,7 @@ class KitchenService:
                 order.status = OrderStatus.READY
         
         # Есть позиции в приготовлении
-        elif any(status in [OrderItemStatus.IN_PREPARATION, OrderItemStatus.SENT_TO_KITCHEN] for status in item_statuses):
+        elif any(status == OrderItemStatus.IN_PREPARATION for status in item_statuses):
             if order.status == OrderStatus.PENDING:
                 order.status = OrderStatus.PENDING  # Остается в ожидании
     
@@ -181,9 +181,10 @@ class KitchenService:
                 price=Decimal(str(dish.price)),
                 total=item_total,
                 comment=item_data.get('comment'),
-                status=OrderItemStatus.NEW,
+                status=OrderItemStatus.IN_PREPARATION,
                 department=dish.department,
-                estimated_preparation_time=dish.cooking_time
+                estimated_preparation_time=dish.cooking_time,
+                preparation_started_at=datetime.utcnow()
             )
             
             db.add(order_item)
@@ -261,24 +262,9 @@ class KitchenService:
         item_ids: List[int],
         db: AsyncSession
     ) -> bool:
-        """Отправить позиции заказа на кухню"""
-        
-        query = select(OrderItem).where(
-            and_(
-                OrderItem.order_id == order_id,
-                OrderItem.id.in_(item_ids),
-                OrderItem.status == OrderItemStatus.NEW
-            )
-        )
-        
-        result = await db.execute(query)
-        items = result.scalars().all()
-        
-        current_time = datetime.utcnow()
-        
-        for item in items:
-            item.status = OrderItemStatus.SENT_TO_KITCHEN
-            item.sent_to_kitchen_at = current_time
-        
-        await db.commit()
-        return len(items) > 0
+        """
+        DEPRECATED: Функция больше не используется.
+        Все позиции теперь создаются сразу со статусом IN_PREPARATION.
+        """
+        # Все позиции уже в статусе IN_PREPARATION, ничего делать не нужно
+        return True

@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 class OrderItemStatus(str, enum.Enum):
     """Статусы позиций заказа"""
-    NEW = "new"                      # Новая позиция
-    SENT_TO_KITCHEN = "sent_to_kitchen"  # Отправлена на кухню
-    IN_PREPARATION = "in_preparation"    # Готовится
+    NEW = "new"                      # DEPRECATED: Не используется в новой логике
+    SENT_TO_KITCHEN = "sent_to_kitchen"  # DEPRECATED: Не используется в новой логике
+    IN_PREPARATION = "in_preparation"    # Готовится (статус по умолчанию)
     READY = "ready"                  # Готова к подаче
     SERVED = "served"                # Подана
     CANCELLED = "cancelled"          # Отменена

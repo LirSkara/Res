@@ -72,8 +72,6 @@ async def update_item_status(
         )
     
     status_names = {
-        OrderItemStatus.NEW: "новая",
-        OrderItemStatus.SENT_TO_KITCHEN: "отправлена на кухню",
         OrderItemStatus.IN_PREPARATION: "готовится",
         OrderItemStatus.READY: "готова",
         OrderItemStatus.SERVED: "подана",
@@ -129,7 +127,10 @@ async def send_items_to_kitchen(
     current_user: CurrentUser
 ):
     """
-    Отправить позиции заказа на кухню
+    DEPRECATED: Отправить позиции заказа на кухню
+    
+    Этот эндпоинт больше не выполняет никаких действий,
+    так как все позиции теперь создаются сразу со статусом IN_PREPARATION.
     """
     # Проверяем права доступа
     if current_user.role.value not in ['waiter', 'admin']:
@@ -138,20 +139,15 @@ async def send_items_to_kitchen(
             detail="Доступ только для официантов и администраторов"
         )
     
+    # Функция больше не нужна, все позиции сразу в приготовлении
     success = await KitchenService.send_items_to_kitchen(
         order_id=order_id,
         item_ids=item_ids,
         db=db
     )
     
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Не удалось отправить позиции на кухню"
-        )
-    
     return APIResponse(
-        message=f"Позиции отправлены на кухню для заказа #{order_id}"
+        message=f"Все позиции уже находятся на кухне (статус IN_PREPARATION)"
     )
 
 
