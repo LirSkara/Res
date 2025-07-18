@@ -57,8 +57,8 @@ class Settings(BaseSettings):
         "http://localhost:3000", 
         "http://127.0.0.1:3000",
         "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "*"
+        "http://127.0.0.1:8080"
+        # УБРАЛИ "*" - он не совместим с allow_credentials=True
     ]
     
     # Trusted Hosts - Разрешенные хосты для защиты от Host Header Injection

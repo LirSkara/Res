@@ -120,10 +120,10 @@ async def create_order(
         existing_order = existing_order_result.scalar_one_or_none()
         
         if existing_order:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"У столика {table.number} уже есть активный заказ #{existing_order.id}"
-            )
+            # МЯГКАЯ обработка: возвращаем информацию о том, что это дозаказ
+            print(f"🔄 Для столика {table.number} уже есть активный заказ #{existing_order.id}, но разрешаем создание дозаказа")
+            # Можно в будущем добавить логику создания дозаказа
+            # Пока что просто разрешаем создать новый заказ
         
         # Проверяем блюда и рассчитываем общую стоимость
         total_price = Decimal('0.00')
@@ -198,7 +198,9 @@ async def create_order(
                 'quantity': item_data.quantity,
                 'price': Decimal(str(variation.price)),
                 'total': item_total,
-                'comment': getattr(item_data, 'comment', None)
+                'comment': getattr(item_data, 'comment', None),
+                'department': getattr(dish, 'department', 'kitchen'),  # Используем department из блюда или по умолчанию 'kitchen'
+                'estimated_preparation_time': getattr(dish, 'cooking_time', 15)  # Используем время приготовления из блюда или 15 мин по умолчанию
             })
         
         # Создаем заказ
@@ -283,11 +285,13 @@ async def create_order(
                     total=item.total,
                     comment=item.comment,
                     status=item.status,
+                    department=item.department,  # Добавили недостающее поле
                     created_at=item.created_at,
                     updated_at=item.updated_at,
                     dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
                     dish_image_url=item.dish.main_image_url if item.dish else None,
-                    dish_cooking_time=item.dish.cooking_time if item.dish else None
+                    dish_cooking_time=item.dish.cooking_time if item.dish else None,
+                    dish_department=item.dish.department if (item.dish and hasattr(item.dish, 'department')) else 'kitchen'  # Добавили недостающее поле
                 )
                 for item in full_order.items
             ]
@@ -307,6 +311,31 @@ async def create_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка создания заказа: {str(e)}"
         )
+
+
+@router.get("/active/table/{table_id}", response_model=List[OrderWithDetails])
+async def get_active_orders_by_table(
+    table_id: int,
+    db: DatabaseSession,
+    current_user: CurrentUser
+):
+    """
+    Получить активные заказы для указанного столика
+    """
+    query = select(Order).options(
+        selectinload(Order.table),
+        selectinload(Order.waiter),
+        selectinload(Order.payment_method),
+        selectinload(Order.items).selectinload(OrderItem.dish)
+    ).where(
+        Order.table_id == table_id,
+        Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
+    )
+    
+    result = await db.execute(query)
+    orders = result.scalars().all()
+    
+    return orders
 
 
 @router.get("/{order_id}", response_model=OrderWithDetails)
@@ -343,10 +372,21 @@ async def get_order(
         payment_method_name=order.payment_method.name if order.payment_method else None,
         items=[
             OrderItemWithDish(
-                **item.__dict__,
+                id=item.id,
+                dish_id=item.dish_id,
+                order_id=item.order_id,
+                quantity=item.quantity,
+                price=item.price,
+                total=item.total,
+                comment=item.comment,
+                status=item.status,
+                department=item.department,  # Добавили недостающее поле
+                created_at=item.created_at,
+                updated_at=item.updated_at,
                 dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
                 dish_image_url=item.dish.main_image_url if item.dish else None,
-                dish_cooking_time=item.dish.cooking_time if item.dish else None
+                dish_cooking_time=item.dish.cooking_time if item.dish else None,
+                dish_department=item.dish.department if (item.dish and hasattr(item.dish, 'department')) else 'kitchen'  # Добавили недостающее поле
             )
             for item in order.items
         ]
@@ -708,7 +748,9 @@ async def create_delivery_order(
                 'quantity': item_data.quantity,
                 'price': Decimal(str(variation.price)),
                 'total': item_total,
-                'comment': getattr(item_data, 'comment', None)
+                'comment': getattr(item_data, 'comment', None),
+                'department': getattr(dish, 'department', 'kitchen'),  # Используем department из блюда или по умолчанию 'kitchen'
+                'estimated_preparation_time': getattr(dish, 'cooking_time', 15)  # Используем время приготовления из блюда или 15 мин по умолчанию
             })
         
         # Создаем заказ с доставкой
@@ -792,11 +834,13 @@ async def create_delivery_order(
                     total=item.total,
                     comment=item.comment,
                     status=item.status,
+                    department=item.department,  # Добавили недостающее поле
                     created_at=item.created_at,
                     updated_at=item.updated_at,
                     dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
                     dish_image_url=item.dish.main_image_url if item.dish else None,
-                    dish_cooking_time=item.dish.cooking_time if item.dish else None
+                    dish_cooking_time=item.dish.cooking_time if item.dish else None,
+                    dish_department=item.dish.department if (item.dish and hasattr(item.dish, 'department')) else 'kitchen'  # Добавили недостающее поле
                 )
                 for item in full_order.items
             ]

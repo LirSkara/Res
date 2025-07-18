@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 class OrderStatus(str, enum.Enum):
     """Статусы заказа"""
     PENDING = "pending"
+    IN_PROGRESS = "in_progress"  # Добавили отсутствующий статус
     READY = "ready"
     SERVED = "served"
     DINING = "dining"
