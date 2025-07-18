@@ -120,10 +120,166 @@ async def create_order(
         existing_order = existing_order_result.scalar_one_or_none()
         
         if existing_order:
-            # МЯГКАЯ обработка: возвращаем информацию о том, что это дозаказ
-            print(f"🔄 Для столика {table.number} уже есть активный заказ #{existing_order.id}, но разрешаем создание дозаказа")
-            # Можно в будущем добавить логику создания дозаказа
-            # Пока что просто разрешаем создать новый заказ
+            # ДОБАВЛЕНИЕ К СУЩЕСТВУЮЩЕМУ ЗАКАЗУ
+            print(f"🔄 Для столика {table.number} уже есть активный заказ #{existing_order.id}, добавляем к нему позиции")
+            
+            # Проверяем блюда и рассчитываем стоимость дозаказа
+            additional_price = Decimal('0.00')
+            validated_items = []
+            
+            for item_data in order_data.items:
+                dish_query = select(Dish).where(Dish.id == item_data.dish_id)
+                dish_result = await db.execute(dish_query)
+                dish = dish_result.scalar_one_or_none()
+                
+                if not dish:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Блюдо с ID {item_data.dish_id} не найдено"
+                    )
+                
+                if not dish.is_available:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Блюдо '{dish.name}' недоступно"
+                    )
+                
+                # Получаем вариацию блюда для цены
+                from ..models import DishVariation
+                
+                if hasattr(item_data, 'dish_variation_id') and item_data.dish_variation_id:
+                    # Конкретная вариация указана
+                    variation_query = select(DishVariation).where(
+                        DishVariation.id == item_data.dish_variation_id,
+                        DishVariation.dish_id == dish.id,
+                        DishVariation.is_available == True
+                    )
+                    variation_result = await db.execute(variation_query)
+                    variation = variation_result.scalar_one_or_none()
+                    
+                    if not variation:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Вариация блюда с ID {item_data.dish_variation_id} не найдена или недоступна"
+                        )
+                else:
+                    # Берем дефолтную вариацию
+                    default_variation_query = select(DishVariation).where(
+                        DishVariation.dish_id == dish.id,
+                        DishVariation.is_default == True,
+                        DishVariation.is_available == True
+                    )
+                    default_result = await db.execute(default_variation_query)
+                    variation = default_result.scalar_one_or_none()
+                    
+                    if not variation:
+                        # Если нет дефолтной, берем первую доступную
+                        first_variation_query = select(DishVariation).where(
+                            DishVariation.dish_id == dish.id,
+                            DishVariation.is_available == True
+                        ).limit(1)
+                        first_result = await db.execute(first_variation_query)
+                        variation = first_result.scalar_one_or_none()
+                        
+                        if not variation:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"У блюда '{dish.name}' нет доступных вариаций"
+                            )
+                
+                item_total = Decimal(str(variation.price)) * item_data.quantity
+                additional_price += item_total
+                
+                validated_items.append({
+                    'dish': dish,
+                    'variation': variation,
+                    'quantity': item_data.quantity,
+                    'price': Decimal(str(variation.price)),
+                    'total': item_total,
+                    'comment': getattr(item_data, 'comment', None),
+                    'department': getattr(dish, 'department', 'kitchen'),
+                    'estimated_preparation_time': getattr(dish, 'cooking_time', 15)
+                })
+            
+            # Добавляем позиции к существующему заказу
+            order_items = []
+            for item_data in validated_items:
+                order_item = OrderItem(
+                    order_id=existing_order.id,
+                    dish_id=item_data['dish'].id,
+                    dish_variation_id=item_data['variation'].id,
+                    quantity=item_data['quantity'],
+                    price=item_data['price'],
+                    total=item_data['total'],
+                    comment=item_data.get('comment'),
+                    status=OrderItemStatus.IN_PREPARATION,
+                    department=item_data['department'],
+                    estimated_preparation_time=item_data['estimated_preparation_time'],
+                    preparation_started_at=datetime.utcnow()
+                )
+                db.add(order_item)
+                order_items.append(order_item)
+            
+            # Обновляем общую стоимость заказа
+            existing_order.total_price = Decimal(str(existing_order.total_price)) + additional_price
+            existing_order.updated_at = datetime.utcnow()
+            
+            await db.commit()
+            
+            # Загружаем обновленный заказ с полной информацией
+            full_order_query = select(Order).options(
+                selectinload(Order.table),
+                selectinload(Order.waiter),
+                selectinload(Order.payment_method),
+                selectinload(Order.items).selectinload(OrderItem.dish)
+            ).where(Order.id == existing_order.id)
+            
+            full_order_result = await db.execute(full_order_query)
+            full_order = full_order_result.scalar_one()
+            
+            # Формируем ответ с детальной информацией
+            order_response = OrderWithDetails(
+                id=full_order.id,
+                table_id=full_order.table_id,
+                waiter_id=full_order.waiter_id,
+                order_type=full_order.order_type,
+                notes=full_order.notes,
+                kitchen_notes=full_order.kitchen_notes,
+                status=full_order.status,
+                payment_status=full_order.payment_status,
+                payment_method_id=full_order.payment_method_id,
+                total_price=full_order.total_price,
+                served_at=full_order.served_at,
+                cancelled_at=full_order.cancelled_at,
+                time_to_serve=full_order.time_to_serve,
+                created_at=full_order.created_at,
+                updated_at=full_order.updated_at,
+                table_number=full_order.table.number if full_order.table else None,
+                waiter_name=full_order.waiter.full_name if full_order.waiter else "Не указан",
+                payment_method_name=full_order.payment_method.name if full_order.payment_method else None,
+                items=[
+                    OrderItemWithDish(
+                        id=item.id,
+                        dish_id=item.dish_id,
+                        order_id=item.order_id,
+                        quantity=item.quantity,
+                        price=item.price,
+                        total=item.total,
+                        comment=item.comment,
+                        status=item.status,
+                        department=item.department,
+                        created_at=item.created_at,
+                        updated_at=item.updated_at,
+                        dish_name=item.dish.name if item.dish else "Неизвестное блюдо",
+                        dish_image_url=item.dish.main_image_url if item.dish else None,
+                        dish_cooking_time=item.dish.cooking_time if item.dish else None,
+                        dish_department=item.dish.department if (item.dish and hasattr(item.dish, 'department')) else 'kitchen'
+                    )
+                    for item in full_order.items
+                ]
+            )
+            
+            return order_response
         
         # Проверяем блюда и рассчитываем общую стоимость
         total_price = Decimal('0.00')
