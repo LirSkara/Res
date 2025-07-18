@@ -680,6 +680,19 @@ async def update_order_payment_status(
         order.payment_method_id = payment_data.payment_method_id
     
     order.payment_status = payment_data.payment_status
+    
+    # Если заказ оплачен, освобождаем столик
+    if payment_data.payment_status == PaymentStatus.PAID:
+        if order.table_id:
+            # Загружаем столик с заказом
+            table_query = select(Table).where(Table.id == order.table_id)
+            table_result = await db.execute(table_query)
+            table = table_result.scalar_one_or_none()
+            
+            if table:
+                table.is_occupied = False
+                table.current_order_id = None
+    
     await db.commit()
     
     payment_names = {
@@ -737,6 +750,19 @@ async def complete_order_payment(
     # Обновляем заказ
     order.payment_method_id = payment_data.payment_method_id
     order.payment_status = payment_data.payment_status
+    
+    # Если заказ оплачен, освобождаем столик
+    if payment_data.payment_status == PaymentStatus.PAID:
+        if order.table_id:
+            # Загружаем столик с заказом
+            table_query = select(Table).where(Table.id == order.table_id)
+            table_result = await db.execute(table_query)
+            table = table_result.scalar_one_or_none()
+            
+            if table:
+                table.is_occupied = False
+                table.current_order_id = None
+    
     await db.commit()
     
     return APIResponse(
