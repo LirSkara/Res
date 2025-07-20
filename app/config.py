@@ -87,9 +87,9 @@ class Settings(BaseSettings):
     max_json_size: int = 1024 * 1024  # 1MB для JSON запросов
     
     # Security - DDoS Protection
-    rate_limit_max_requests: int = 100  # Максимальное количество запросов
+    rate_limit_max_requests: int = 10000  # Максимальное количество запросов
     rate_limit_window: int = 60  # Временное окно в секундах (1 минута)
-    rate_limit_block_duration: int = 600  # Длительность блокировки (10 минут)
+    rate_limit_block_duration: int = 60  # Длительность блокировки (1 минута)
     disable_rate_limit_in_debug: bool = True  # Отключать ли ограничение в режиме разработки
     
     # Restaurant
