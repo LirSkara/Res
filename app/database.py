@@ -4,7 +4,7 @@ QRes OS 4 - Database Configuration
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, func, text
 from datetime import datetime
 from typing import AsyncGenerator
 
@@ -32,16 +32,16 @@ AsyncSessionLocal = async_sessionmaker(
 class Base(DeclarativeBase):
     """Базовый класс для всех моделей"""
     
-    # Автоматические поля времени для всех моделей
+    # Автоматические поля времени для всех моделей с московским временем
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
-        server_default=func.now(),
+        server_default=text("datetime('now', '+3 hours')"),  # UTC + 3 часа для Москвы
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
-        server_default=func.now(),
-        onupdate=func.now(),
+        server_default=text("datetime('now', '+3 hours')"),  # UTC + 3 часа для Москвы
+        onupdate=text("datetime('now', '+3 hours')"),
         nullable=False
     )
 

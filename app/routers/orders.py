@@ -3,10 +3,10 @@ QRes OS 4 - Orders Router
 Роутер для управления заказами и позициями заказов
 """
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func, update, and_, case
 from sqlalchemy.orm import selectinload
 from decimal import Decimal
 
@@ -20,6 +20,11 @@ from ..schemas import (
     OrderItemWithDish, OrderStatusUpdate, OrderPaymentUpdate, OrderPaymentComplete,
     OrderList, OrderStats, APIResponse, DeliveryOrderCreate, DeliveryOrderResponse
 )
+
+
+def moscow_now() -> datetime:
+    """Получить текущее время в московском часовом поясе (UTC+3)"""
+    return datetime.utcnow() + timedelta(hours=3)
 
 
 router = APIRouter()
@@ -111,13 +116,35 @@ async def create_order(
                 detail="Столик неактивен"
             )
         
-        # Проверяем, нет ли уже активного заказа для столика
+                # Проверяем, есть ли уже активный заказ для этого столика
+        # Ищем в порядке приоритета: PENDING -> IN_PROGRESS -> READY -> SERVED -> DINING
+        # ВАЖНО: не добавляем к оплаченным заказам!
         existing_order_query = select(Order).where(
-            Order.table_id == order_data.table_id,
-            Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
+            and_(
+                Order.table_id == table.id,
+                Order.status.in_([
+                    OrderStatus.PENDING,
+                    OrderStatus.IN_PROGRESS,
+                    OrderStatus.READY,
+                    OrderStatus.SERVED,
+                    OrderStatus.DINING
+                ]),
+                Order.payment_status != PaymentStatus.PAID  # НЕ добавляем к уже оплаченным заказам
+            )
+        ).order_by(
+            # Сортируем по приоритету статусов для получения самого подходящего заказа
+            case(
+                (Order.status == OrderStatus.PENDING, 1),
+                (Order.status == OrderStatus.IN_PROGRESS, 2),
+                (Order.status == OrderStatus.READY, 3),
+                (Order.status == OrderStatus.SERVED, 4),
+                (Order.status == OrderStatus.DINING, 5),
+                else_=6
+            ),
+            Order.created_at.desc()  # При равных статусах берем самый новый
         )
         existing_order_result = await db.execute(existing_order_query)
-        existing_order = existing_order_result.scalar_one_or_none()
+        existing_order = existing_order_result.scalars().first()  # Берем первый по приоритету
         
         if existing_order:
             # ДОБАВЛЕНИЕ К СУЩЕСТВУЮЩЕМУ ЗАКАЗУ
@@ -215,14 +242,14 @@ async def create_order(
                     status=OrderItemStatus.IN_PREPARATION,
                     department=item_data['department'],
                     estimated_preparation_time=item_data['estimated_preparation_time'],
-                    preparation_started_at=datetime.utcnow()
+                    preparation_started_at=moscow_now()
                 )
                 db.add(order_item)
                 order_items.append(order_item)
             
             # Обновляем общую стоимость заказа
             existing_order.total_price = Decimal(str(existing_order.total_price)) + additional_price
-            existing_order.updated_at = datetime.utcnow()
+            existing_order.updated_at = moscow_now()
             
             await db.commit()
             
@@ -389,7 +416,7 @@ async def create_order(
                 status=OrderItemStatus.IN_PREPARATION,
                 department=item_data['department'],
                 estimated_preparation_time=item_data['estimated_preparation_time'],
-                preparation_started_at=datetime.utcnow()
+                preparation_started_at=moscow_now()
             )
             db.add(order_item)
             order_items.append(order_item)
@@ -485,7 +512,13 @@ async def get_active_orders_by_table(
         selectinload(Order.items).selectinload(OrderItem.dish)
     ).where(
         Order.table_id == table_id,
-        Order.status.in_([OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.READY])
+        Order.status.in_([
+            OrderStatus.PENDING, 
+            OrderStatus.IN_PROGRESS, 
+            OrderStatus.READY, 
+            OrderStatus.SERVED,
+            OrderStatus.DINING
+        ])
     )
     
     result = await db.execute(query)
@@ -606,21 +639,21 @@ async def update_order_status(
     
     # Обновляем время подачи при смене статуса на "подан"
     if status_data.status == OrderStatus.SERVED and old_status != OrderStatus.SERVED:
-        order.served_at = datetime.utcnow()
+        order.served_at = moscow_now()
         order.time_to_serve = int((order.served_at - order.created_at).total_seconds() / 60)
         # Столик НЕ освобождается - клиенты еще едят
     
     # Столик освобождается только при завершении или отмене заказа
     elif status_data.status == OrderStatus.COMPLETED:
         # Освобождаем столик при завершении заказа
-        order.completed_at = datetime.utcnow()
+        order.completed_at = moscow_now()
         if order.table:
             order.table.is_occupied = False
             order.table.current_order_id = None
     
     # При отмене заказа также освобождаем столик
     elif status_data.status == OrderStatus.CANCELLED:
-        order.cancelled_at = datetime.utcnow()
+        order.cancelled_at = moscow_now()
         if order.table:
             order.table.is_occupied = False
             order.table.current_order_id = None
@@ -679,6 +712,35 @@ async def update_order_payment_status(
         
         order.payment_method_id = payment_data.payment_method_id
     
+    # ВАЖНО: Если пытаемся оплатить заказ, проверяем готовность всех позиций
+    if payment_data.payment_status == PaymentStatus.PAID:
+        unfinished_items_query = select(OrderItem).where(
+            and_(
+                OrderItem.order_id == order_id,
+                OrderItem.status.in_([
+                    OrderItemStatus.IN_PREPARATION,
+                    OrderItemStatus.READY
+                ])
+            )
+        )
+        unfinished_items_result = await db.execute(unfinished_items_query)
+        unfinished_items = unfinished_items_result.scalars().all()
+        
+        if unfinished_items:
+            unfinished_names = []
+            for item in unfinished_items:
+                # Загружаем блюдо для получения названия
+                dish_query = select(Dish).where(Dish.id == item.dish_id)
+                dish_result = await db.execute(dish_query)
+                dish = dish_result.scalar_one_or_none()
+                dish_name = dish.name if dish else f"Блюдо ID {item.dish_id}"
+                unfinished_names.append(f"{dish_name} (статус: {item.status.value})")
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Нельзя закрыть заказ: не все позиции готовы. Неготовые позиции: {'; '.join(unfinished_names)}"
+            )
+    
     order.payment_status = payment_data.payment_status
     
     # Если заказ оплачен, освобождаем столик
@@ -730,6 +792,34 @@ async def complete_order_payment(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Заказ уже оплачен"
+        )
+    
+    # ВАЖНО: Проверяем, что все позиции заказа готовы
+    unfinished_items_query = select(OrderItem).where(
+        and_(
+            OrderItem.order_id == order_id,
+            OrderItem.status.in_([
+                OrderItemStatus.IN_PREPARATION,
+                OrderItemStatus.READY
+            ])
+        )
+    )
+    unfinished_items_result = await db.execute(unfinished_items_query)
+    unfinished_items = unfinished_items_result.scalars().all()
+    
+    if unfinished_items:
+        unfinished_names = []
+        for item in unfinished_items:
+            # Загружаем блюдо для получения названия
+            dish_query = select(Dish).where(Dish.id == item.dish_id)
+            dish_result = await db.execute(dish_query)
+            dish = dish_result.scalar_one_or_none()
+            dish_name = dish.name if dish else f"Блюдо ID {item.dish_id}"
+            unfinished_names.append(f"{dish_name} (статус: {item.status.value})")
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Нельзя закрыть заказ: не все позиции готовы. Неготовые позиции: {'; '.join(unfinished_names)}"
         )
     
     # Проверяем способ оплаты
@@ -970,7 +1060,7 @@ async def create_delivery_order(
                 status=OrderItemStatus.IN_PREPARATION,
                 department=item_data['department'],
                 estimated_preparation_time=item_data['estimated_preparation_time'],
-                preparation_started_at=datetime.utcnow()
+                preparation_started_at=moscow_now()
             )
             db.add(order_item)
             order_items.append(order_item)
@@ -1071,7 +1161,7 @@ async def cancel_order(
     
     # Отменяем заказ
     order.status = OrderStatus.CANCELLED
-    order.cancelled_at = datetime.utcnow()
+    order.cancelled_at = moscow_now()
     
     # Освобождаем столик
     order.table.is_occupied = False

@@ -2,7 +2,7 @@
 QRes OS 4 - Order Models
 Модели заказа и позиций заказа
 """
-from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum
+from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from typing import Optional, List, TYPE_CHECKING
@@ -22,27 +22,27 @@ if TYPE_CHECKING:
 
 class OrderStatus(str, enum.Enum):
     """Статусы заказа"""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"  # Добавили отсутствующий статус
-    READY = "ready"
-    SERVED = "served"
-    DINING = "dining"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"  # Добавили отсутствующий статус
+    READY = "READY"
+    SERVED = "SERVED"
+    DINING = "DINING"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class PaymentStatus(str, enum.Enum):
     """Статусы оплаты"""
-    UNPAID = "unpaid"
-    PAID = "paid"
-    REFUNDED = "refunded"
+    UNPAID = "UNPAID"
+    PAID = "PAID"
+    REFUNDED = "REFUNDED"
 
 
 class OrderType(str, enum.Enum):
     """Типы заказа"""
-    DINE_IN = "dine_in"
-    TAKEAWAY = "takeaway"
-    DELIVERY = "delivery"
+    DINE_IN = "DINE_IN"
+    TAKEAWAY = "TAKEAWAY"
+    DELIVERY = "DELIVERY"
 
 
 class Order(Base):
@@ -101,15 +101,15 @@ class Order(Base):
     time_to_serve: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # минуты
     
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=func.current_timestamp()
+        server_default=func.datetime('now', '+3 hours')  # UTC + 3 часа для Москвы
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=func.current_timestamp(),
-        onupdate=func.current_timestamp()
+        server_default=func.datetime('now', '+3 hours'),  # UTC + 3 часа для Москвы
+        onupdate=func.datetime('now', '+3 hours')
     )
     
     # Комментарии

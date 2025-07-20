@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 
 class OrderItemStatus(str, enum.Enum):
     """Статусы позиций заказа"""
-    NEW = "new"                      # DEPRECATED: Не используется в новой логике
-    SENT_TO_KITCHEN = "sent_to_kitchen"  # DEPRECATED: Не используется в новой логике
-    IN_PREPARATION = "in_preparation"    # Готовится (статус по умолчанию)
-    READY = "ready"                  # Готова к подаче
-    SERVED = "served"                # Подана
-    CANCELLED = "cancelled"          # Отменена
+    NEW = "NEW"                      # DEPRECATED: Не используется в новой логике
+    SENT_TO_KITCHEN = "SENT_TO_KITCHEN"  # DEPRECATED: Не используется в новой логике
+    IN_PREPARATION = "IN_PREPARATION"    # Готовится (статус по умолчанию)
+    READY = "READY"                  # Готова к подаче
+    SERVED = "SERVED"                # Подана
+    CANCELLED = "CANCELLED"          # Отменена
 
 
 class KitchenDepartment(str, enum.Enum):
@@ -74,15 +74,15 @@ class OrderItem(Base):
     
     # Стандартные временные метки
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=func.current_timestamp()
+        server_default=func.datetime('now', '+3 hours')  # UTC + 3 часа для Москвы
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=False,
-        server_default=func.current_timestamp(),
-        onupdate=func.current_timestamp()
+        server_default=func.datetime('now', '+3 hours'),  # UTC + 3 часа для Москвы
+        onupdate=func.datetime('now', '+3 hours')
     )
     
     # Связи

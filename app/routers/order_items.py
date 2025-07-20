@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..deps import DatabaseSession, WaiterUser, KitchenUser, CurrentUser
 from ..models import OrderItem, Order, Dish
@@ -18,6 +18,11 @@ from ..schemas import (
     OrderItem as OrderItemSchema, OrderItemCreate, OrderItemUpdate, 
     OrderItemWithDish, OrderItemStatusUpdate, APIResponse
 )
+
+
+def moscow_now() -> datetime:
+    """Получить текущее время в московском часовом поясе (UTC+3)"""
+    return datetime.utcnow() + timedelta(hours=3)
 
 
 router = APIRouter()
@@ -132,7 +137,7 @@ async def add_item_to_order(
         total=item_total,
         comment=getattr(item_data, 'comment', None),
         status=OrderItemStatus.IN_PREPARATION,
-        preparation_started_at=datetime.utcnow()
+        preparation_started_at=moscow_now()
     )
     
     db.add(new_item)

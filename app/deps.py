@@ -3,6 +3,7 @@ QRes OS 4 - FastAPI Dependencies
 Зависимости для инъекции в роутеры
 """
 from typing import Annotated
+from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,11 @@ from .database import get_db
 from .services.auth import AuthService
 from .models import User, UserRole
 from .schemas import TokenData
+
+
+def moscow_now() -> datetime:
+    """Получить текущее время в московском часовом поясе (UTC+3)"""
+    return datetime.utcnow() + timedelta(hours=3)
 
 
 # Security scheme

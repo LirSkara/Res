@@ -1,9 +1,10 @@
 """
 QRes OS 4 - Kitchen Router
-API для управления кухонными цехами
+Роутер для управления кухонными цехами
 """
-from fastapi import APIRouter, HTTPException, status, Query
 from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
 from ..deps import DatabaseSession, CurrentUser
@@ -53,10 +54,10 @@ async def update_item_status(
     Обновить статус позиции заказа
     """
     # Проверяем права доступа
-    if current_user.role.value not in ['kitchen', 'admin']:
+    if current_user.role.value not in ['kitchen', 'admin', 'waiter', 'KITCHEN', 'ADMIN', 'WAITER']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Доступ только для кухни и администраторов"
+            detail="Доступ для кухни, официантов и администраторов"
         )
     
     success = await KitchenService.update_item_status(
@@ -197,3 +198,49 @@ async def get_departments(current_user: CurrentUser):
         })
     
     return departments
+
+
+@router.get("/orders/{order_id}/progress")
+async def get_order_progress(
+    order_id: int,
+    db: DatabaseSession,
+    current_user: CurrentUser
+):
+    """
+    Получить прогресс выполнения заказа
+    """
+    progress = await KitchenService.get_order_progress(order_id, db)
+    
+    if not progress:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Заказ не найден"
+        )
+    
+    return progress
+
+
+@router.get("/dishes", response_model=List[KitchenOrderItem])
+async def get_all_kitchen_dishes(
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    department: Optional[KitchenDepartment] = Query(None),
+    status_filter: Optional[List[OrderItemStatus]] = Query(None)
+):
+    """
+    Получить все блюда для кухни (из всех заказов)
+    """
+    # Проверяем права доступа
+    if current_user.role.value not in ['kitchen', 'admin', 'KITCHEN', 'ADMIN']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ только для кухни и администраторов"
+        )
+    
+    dishes = await KitchenService.get_all_kitchen_dishes(
+        db=db,
+        department=department,
+        status_filter=status_filter
+    )
+    
+    return dishes

@@ -12,6 +12,12 @@ from decimal import Decimal
 from ..models import Order, OrderItem, Table, Dish, User
 from ..models.order import OrderStatus
 from ..models.order_item import OrderItemStatus, KitchenDepartment
+from ..deps import moscow_now
+
+
+def moscow_now() -> datetime:
+    """Получить текущее время в московском часовом поясе (UTC+3)"""
+    return datetime.utcnow() + timedelta(hours=3)
 
 
 class KitchenService:
@@ -69,7 +75,8 @@ class KitchenService:
         """Обновить статус позиции заказа"""
         
         query = select(OrderItem).options(
-            joinedload(OrderItem.order)
+            joinedload(OrderItem.order),
+            joinedload(OrderItem.dish)
         ).where(OrderItem.id == item_id)
         
         result = await db.execute(query)
@@ -106,8 +113,10 @@ class KitchenService:
     async def _update_order_status(order: Order, db: AsyncSession) -> None:
         """Автоматически обновить статус заказа на основе статусов позиций"""
         
-        # Получаем все позиции заказа
-        query = select(OrderItem).where(OrderItem.order_id == order.id)
+        # Получаем все позиции заказа с данными о блюдах
+        query = select(OrderItem).options(
+            joinedload(OrderItem.dish)
+        ).where(OrderItem.order_id == order.id)
         result = await db.execute(query)
         items = result.scalars().all()
         
@@ -116,6 +125,7 @@ class KitchenService:
         
         # Анализируем статусы позиций
         item_statuses = [item.status for item in items]
+        old_status = order.status
         
         # Все позиции поданы
         if all(status == OrderItemStatus.SERVED for status in item_statuses):
@@ -125,8 +135,15 @@ class KitchenService:
                 if order.created_at:
                     order.time_to_serve = int((order.served_at - order.created_at).total_seconds() / 60)
         
-        # Есть готовые позиции
+        # Все позиции готовы (но еще не поданы)
+        elif all(status in [OrderItemStatus.READY, OrderItemStatus.SERVED] for status in item_statuses) and \
+             any(status == OrderItemStatus.READY for status in item_statuses):
+            if order.status != OrderStatus.READY:
+                order.status = OrderStatus.READY
+        
+        # Есть хотя бы одна готовая позиция (частично готов)
         elif any(status == OrderItemStatus.READY for status in item_statuses):
+            # Если заказ был в ожидании, переводим в частично готовый
             if order.status == OrderStatus.PENDING:
                 order.status = OrderStatus.READY
         
@@ -134,6 +151,95 @@ class KitchenService:
         elif any(status == OrderItemStatus.IN_PREPARATION for status in item_statuses):
             if order.status == OrderStatus.PENDING:
                 order.status = OrderStatus.PENDING  # Остается в ожидании
+        
+        # Логируем изменение статуса для отладки
+        if old_status != order.status:
+            print(f"🔄 Заказ #{order.id}: статус изменен с {old_status.value} на {order.status.value}")
+            
+            # Подсчитываем готовые позиции для уведомления
+            ready_items = [item for item in items if item.status == OrderItemStatus.READY]
+            total_items = len(items)
+            
+            print(f"   📊 Готовых позиций: {len(ready_items)}/{total_items}")
+            
+            # Если есть готовые позиции, выводим их список
+            if ready_items:
+                ready_names = [item.dish.name if item.dish else f"Позиция #{item.id}" for item in ready_items]
+                print(f"   ✅ Готовые блюда: {', '.join(ready_names)}")
+            
+            # Позиции еще в приготовлении
+            in_prep_items = [item for item in items if item.status == OrderItemStatus.IN_PREPARATION]
+            if in_prep_items:
+                prep_names = [item.dish.name if item.dish else f"Позиция #{item.id}" for item in in_prep_items]
+                print(f"   🔥 Готовятся: {', '.join(prep_names)}")
+                
+        # TODO: Здесь можно добавить отправку WebSocket уведомлений официантам
+    
+    @staticmethod
+    async def get_order_progress(order_id: int, db: AsyncSession) -> Dict:
+        """Получить прогресс выполнения заказа"""
+        
+        # Получаем заказ с позициями и данными о блюдах
+        query = select(Order).options(
+            selectinload(Order.items).selectinload(OrderItem.dish)
+        ).where(Order.id == order_id)
+        
+        result = await db.execute(query)
+        order = result.scalar_one_or_none()
+        
+        if not order:
+            return None
+        
+        items = order.items
+        if not items:
+            return {
+                "order_id": order_id,
+                "total_items": 0,
+                "ready_items": 0,
+                "in_preparation_items": 0,
+                "served_items": 0,
+                "progress_percentage": 0,
+                "items_detail": []
+            }
+        
+        # Анализируем статусы позиций
+        total_items = len(items)
+        ready_items = len([item for item in items if item.status == OrderItemStatus.READY])
+        in_prep_items = len([item for item in items if item.status == OrderItemStatus.IN_PREPARATION])
+        served_items = len([item for item in items if item.status == OrderItemStatus.SERVED])
+        
+        # Рассчитываем прогресс (готовые + поданные / общее количество)
+        completed_items = ready_items + served_items
+        progress_percentage = int((completed_items / total_items) * 100) if total_items > 0 else 0
+        
+        # Детальная информация по позициям
+        items_detail = []
+        for item in items:
+            items_detail.append({
+                "id": item.id,
+                "dish_name": item.dish.name if item.dish else f"Позиция #{item.id}",
+                "quantity": item.quantity,
+                "status": item.status.value,
+                "preparation_started_at": item.preparation_started_at.isoformat() if item.preparation_started_at else None,
+                "ready_at": item.ready_at.isoformat() if item.ready_at else None,
+                "served_at": item.served_at.isoformat() if item.served_at else None,
+                "estimated_time": item.estimated_preparation_time,
+                "actual_time": item.actual_preparation_time
+            })
+        
+        return {
+            "order_id": order_id,
+            "order_status": order.status.value,
+            "total_items": total_items,
+            "ready_items": ready_items,
+            "in_preparation_items": in_prep_items,
+            "served_items": served_items,
+            "progress_percentage": progress_percentage,
+            "items_detail": items_detail,
+            "all_ready": ready_items == total_items and served_items == 0,  # Все готово, но не подано
+            "partially_ready": ready_items > 0 and ready_items < total_items,  # Частично готово
+            "fully_served": served_items == total_items  # Все подано
+        }
     
     @staticmethod
     async def add_items_to_order(
@@ -151,9 +257,13 @@ class KitchenService:
         if not order:
             raise ValueError("Заказ не найден")
         
-        # Проверяем, что заказ можно дополнить
-        if order.status not in [OrderStatus.SERVED, OrderStatus.DINING]:
-            raise ValueError("Дополнить можно только заказы в статусе SERVED или DINING")
+        # Проверяем, что заказ можно дополнить (исключаем только завершенные и отмененные заказы)
+        if order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
+            raise ValueError("Нельзя дополнить завершенный или отмененный заказ")
+        
+        # Если заказ в статусе PENDING, переводим его в IN_PROGRESS
+        if order.status == OrderStatus.PENDING:
+            order.status = OrderStatus.IN_PROGRESS
         
         new_items = []
         total_addition = Decimal('0.00')
@@ -184,7 +294,7 @@ class KitchenService:
                 status=OrderItemStatus.IN_PREPARATION,
                 department=dish.department,
                 estimated_preparation_time=dish.cooking_time,
-                preparation_started_at=datetime.utcnow()
+                preparation_started_at=moscow_now()
             )
             
             db.add(order_item)
@@ -193,9 +303,17 @@ class KitchenService:
         # Обновляем общую сумму заказа
         order.total_price += total_addition
         
-        # Переводим заказ в статус DINING если он был SERVED
+        # Обновляем статус заказа в зависимости от текущего статуса
         if order.status == OrderStatus.SERVED:
+            # Если заказ был подан, но добавили новые позиции - переводим в DINING
             order.status = OrderStatus.DINING
+        elif order.status == OrderStatus.READY:
+            # Если заказ был готов, но добавили новые позиции - возвращаем в IN_PROGRESS
+            order.status = OrderStatus.IN_PROGRESS
+        elif order.status in [OrderStatus.DINING, OrderStatus.IN_PROGRESS, OrderStatus.PENDING]:
+            # Оставляем текущий статус, но убеждаемся что это не PENDING
+            if order.status == OrderStatus.PENDING:
+                order.status = OrderStatus.IN_PROGRESS
         
         await db.commit()
         
@@ -268,3 +386,71 @@ class KitchenService:
         """
         # Все позиции уже в статусе IN_PREPARATION, ничего делать не нужно
         return True
+
+    @staticmethod
+    async def get_all_kitchen_dishes(
+        db: AsyncSession,
+        department: Optional[KitchenDepartment] = None,
+        status_filter: Optional[List[OrderItemStatus]] = None
+    ) -> List[Dict]:
+        """Получить все блюда для кухни из всех заказов"""
+        
+        # Если фильтр статусов не указан, показываем активные статусы
+        if status_filter is None:
+            status_filter = [
+                OrderItemStatus.IN_PREPARATION,
+                OrderItemStatus.READY,
+                OrderItemStatus.SERVED
+            ]
+        
+        # Строим базовый запрос
+        query = select(OrderItem).options(
+            joinedload(OrderItem.dish),
+            joinedload(OrderItem.order).joinedload(Order.table)
+        ).where(
+            OrderItem.status.in_(status_filter)
+        )
+        
+        # Добавляем фильтр по цеху, если указан
+        if department:
+            query = query.where(OrderItem.department == department)
+        
+        # Сортируем по времени создания (старые первыми)
+        query = query.order_by(OrderItem.created_at.asc())
+        
+        result = await db.execute(query)
+        items = result.scalars().all()
+        
+        kitchen_dishes = []
+        for item in items:
+            # Вычисляем время в готовке, если блюдо готовится
+            preparation_time = None
+            if item.status == OrderItemStatus.IN_PREPARATION and item.preparation_started_at:
+                time_diff = moscow_now() - item.preparation_started_at
+                preparation_time = int(time_diff.total_seconds() / 60)  # в минутах
+            
+            # Вычисляем фактическое время готовки, если блюдо готово
+            actual_time = None
+            if item.ready_at and item.preparation_started_at:
+                time_diff = item.ready_at - item.preparation_started_at
+                actual_time = int(time_diff.total_seconds() / 60)  # в минутах
+            
+            kitchen_dishes.append({
+                'id': item.id,
+                'order_id': item.order_id,
+                'dish_name': item.dish.name,
+                'quantity': item.quantity,
+                'status': item.status.value,
+                'department': item.department.value,
+                'comment': item.comment,
+                'estimated_preparation_time': item.dish.cooking_time,
+                'actual_preparation_time': actual_time,
+                'preparation_started_at': item.preparation_started_at.isoformat() if item.preparation_started_at else None,
+                'ready_at': item.ready_at.isoformat() if item.ready_at else None,
+                'served_at': item.served_at.isoformat() if item.served_at else None,
+                'created_at': item.order.created_at.isoformat(),  # Используем время создания заказа, а не элемента
+                'table_number': item.order.table.number if item.order.table else None,
+                'current_preparation_time': preparation_time
+            })
+        
+        return kitchen_dishes
