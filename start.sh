@@ -43,10 +43,23 @@ python3 -m alembic upgrade head
 
 # Определение параметров запуска
 PORT=${PORT:-8000}
-HOST=${HOST:-0.0.0.0}
 LOG_LEVEL=${LOG_LEVEL:-info}
 DEBUG=${DEBUG:-true}
 RELOAD=${RELOAD:-true}
+
+# Определение HOST с проверкой доступности IP
+if [ -z "$HOST" ]; then
+    # Проверяем, доступен ли IP 192.168.4.1 (для Raspberry Pi)
+    if ip addr show | grep -q "192.168.4.1"; then
+        HOST="192.168.4.1"
+        echo -e "${GREEN}✅ Используется фиксированный IP для продакшена: $HOST${NC}"
+    else
+        # Fallback для разработки (Mac/Linux)
+        HOST="127.0.0.1"
+        echo -e "${YELLOW}⚠️  IP 192.168.4.1 недоступен, используется локальный: $HOST${NC}"
+        echo -e "${BLUE}💡 Для настройки фиксированного IP см. NETWORK_SETUP.md${NC}"
+    fi
+fi
 
 echo -e "${BLUE}🚀 Запуск сервера на ${YELLOW}${HOST}:${PORT}${NC}"
 echo -e "${BLUE}📝 Уровень логирования: ${YELLOW}${LOG_LEVEL}${NC}"
@@ -54,8 +67,8 @@ echo -e "${BLUE}⚙️  Режим отладки: ${YELLOW}${DEBUG}${NC}"
 echo -e "${BLUE}🔄 Автоперезагрузка: ${YELLOW}${RELOAD}${NC}"
 echo ""
 echo -e "${GREEN}📚 Документация API доступна по адресу:${NC}"
-echo -e "   ${YELLOW}http://localhost:${PORT}/docs${NC}"
-echo -e "   ${YELLOW}http://localhost:${PORT}/redoc${NC}"
+echo -e "   ${YELLOW}http://${HOST}:${PORT}/docs${NC}"
+echo -e "   ${YELLOW}http://${HOST}:${PORT}/redoc${NC}"
 echo ""
 echo -e "${BLUE}==================================================${NC}"
 echo -e "${GREEN}💡 Нажмите Ctrl+C для остановки сервера${NC}"

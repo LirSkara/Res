@@ -93,7 +93,9 @@ if [ ! -f "$PROJECT_PATH/.env" ]; then
 # QRes OS 4 Environment Configuration
 DEBUG=false
 RELOAD=false
-HOST=0.0.0.0
+# HOST будет автоматически определен в start.sh
+# Для принудительного использования конкретного IP раскомментируйте:
+# HOST=192.168.4.1
 PORT=8000
 LOG_LEVEL=info
 
@@ -108,6 +110,14 @@ LOG_DIR=/var/log/qresos4
 EOF
     chown qresos:qresos "$PROJECT_PATH/.env"
     echo -e "${GREEN}✅ Файл .env создан${NC}"
+fi
+
+# Установка скрипта управления
+echo -e "${BLUE}🔧 Установка скрипта управления...${NC}"
+if [ -f "$PROJECT_PATH/qresos-control.sh" ]; then
+    cp "$PROJECT_PATH/qresos-control.sh" /usr/local/bin/qresos-control
+    chmod +x /usr/local/bin/qresos-control
+    echo -e "${GREEN}✅ Скрипт управления установлен${NC}"
 fi
 
 # Копирование systemd service файла
@@ -160,6 +170,14 @@ echo -e "   ${YELLOW}sudo systemctl restart qresos-backend${NC}    - перез�
 echo -e "   ${YELLOW}sudo systemctl disable qresos-backend${NC}    - отключить автостарт"
 echo -e "   ${YELLOW}sudo journalctl -u qresos-backend -f${NC}     - просмотр логов в реальном времени"
 echo ""
-echo -e "${GREEN}🌐 API будет доступен по адресу: ${YELLOW}http://localhost:8000${NC}"
-echo -e "${GREEN}📚 Документация: ${YELLOW}http://localhost:8000/docs${NC}"
+echo -e "${GREEN}🎮 Команды управления через скрипт:${NC}"
+echo -e "   ${YELLOW}sudo qresos-control start${NC}      - запустить QRes OS 4"
+echo -e "   ${YELLOW}sudo qresos-control stop${NC}       - остановить QRes OS 4"
+echo -e "   ${YELLOW}sudo qresos-control status${NC}     - статус и логи"
+echo -e "   ${YELLOW}sudo qresos-control info${NC}       - информация о проекте"
+echo -e "   ${YELLOW}sudo qresos-control migrate${NC}    - применить миграции"
+echo -e "   ${YELLOW}sudo qresos-control create-admin${NC} - создать админа"
+echo ""
+echo -e "${GREEN}🌐 API будет доступен по адресу: ${YELLOW}http://192.168.4.1:8000${NC}"
+echo -e "${GREEN}📚 Документация: ${YELLOW}http://192.168.4.1:8000/docs${NC}"
 echo ""

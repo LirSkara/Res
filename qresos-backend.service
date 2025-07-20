@@ -13,7 +13,7 @@ Environment=VIRTUAL_ENV=/var/www/qresos4/backend/venv
 Environment=NODE_ENV=production
 Environment=DEBUG=false
 Environment=RELOAD=false
-Environment=HOST=0.0.0.0
+Environment=HOST=192.168.4.1
 Environment=PORT=8000
 Environment=LOG_LEVEL=info
 ExecStartPre=/bin/bash -c 'cd /var/www/qresos4/backend && source venv/bin/activate && python3 -m alembic upgrade head'
