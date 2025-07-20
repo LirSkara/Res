@@ -79,6 +79,49 @@ pip install fastapi uvicorn sqlalchemy alembic aiosqlite
 sudo systemctl status qresos-backend
 ```
 
+### 6. Планшеты не могут подключиться к серверу
+
+**Проблема:** Планшеты подключены к WiFi, но не видят сервер
+
+**Решения:**
+
+```bash
+# Проверка CORS настроек
+curl http://192.168.4.1:8000/debug/cors
+
+# Проверка файрвола
+sudo ufw status
+sudo ufw allow 8000/tcp
+
+# Проверка подключенных устройств
+arp -a | grep "192.168.4"
+
+# Перезапуск WiFi сервисов
+sudo systemctl restart hostapd dnsmasq
+```
+
+### 7. WiFi точка доступа не работает
+
+**Проблема:** Планшеты не видят WiFi сеть
+
+**Решения:**
+
+```bash
+# Проверка hostapd
+sudo systemctl status hostapd
+sudo journalctl -u hostapd -f
+
+# Проверка конфигурации
+sudo hostapd -dd /etc/hostapd/hostapd.conf
+
+# Проверка интерфейса
+iwconfig wlan0
+ip addr show wlan0
+
+# Перезапуск WiFi
+sudo systemctl restart hostapd
+```
+
 ## 🔧 Диагностика
 
 ### Проверка системы
@@ -106,11 +149,9 @@ sudo systemctl status qresos-backend
 # Логи сервиса
 sudo journalctl -u qresos-backend -f
 
-```bash
 # Проверка файлов
 ls -la /home/admin/qresos/backend/
 ls -la /etc/systemd/system/qresos-backend.service
-```
 ```
 
 ### Проверка сети
@@ -122,9 +163,31 @@ hostname -I
 # Проверка конкретного IP
 ip addr show | grep 192.168.4.1
 
-# Тест подключения
+# Тест подключения с сервера
 curl http://192.168.4.1:8000/docs
 curl http://127.0.0.1:8000/docs
+
+# Проверка подключенных планшетов
+arp -a | grep "192.168.4"
+
+# Проверка DHCP аренд
+cat /var/lib/dhcp/dhcpcd.leases 2>/dev/null || echo "DHCP leases file not found"
+```
+
+### Проверка WiFi точки доступа
+
+```bash
+# Статус WiFi AP
+sudo systemctl status hostapd
+
+# Статус DHCP сервера  
+sudo systemctl status dnsmasq
+
+# Проверка WiFi интерфейса
+iwconfig wlan0
+
+# Проверка активных подключений
+sudo iw dev wlan0 station dump
 ```
 
 ## 🏥 Восстановление
@@ -230,7 +293,9 @@ du -sh /home/admin/qresos
    ```
 
 3. Проверьте конфигурацию:
-```bash
-cat /home/admin/qresos/backend/.env
-cat /etc/systemd/system/qresos-backend.service
-```4. Опишите проблему с приложением собранной информации.
+   ```bash
+   cat /home/admin/qresos/backend/.env
+   cat /etc/systemd/system/qresos-backend.service
+   ```
+
+4. Опишите проблему с приложением собранной информации.

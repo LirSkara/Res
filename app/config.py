@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     
     # CORS - Конфигурируем origins в зависимости от окружения
     cors_origins: List[str] = [
+        # Разработка (localhost)
         "http://localhost:5173", 
         "http://127.0.0.1:5173",
         "http://localhost:3002", 
@@ -64,6 +65,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:8080",
         "http://127.0.0.1:8080"
+        # WiFi подсеть 192.168.4.0/24 добавляется автоматически валидатором
     ]
     
     # Trusted Hosts - Разрешенные хосты для защиты от Host Header Injection
@@ -72,11 +74,23 @@ class Settings(BaseSettings):
         "127.0.0.1", 
         "0.0.0.0",           # Для разработки
         "192.168.1.100",     # Локальная сеть для QR кодов
-        "*.localhost"        # Поддомены localhost
+        "*.localhost",       # Поддомены localhost
+        # WiFi точка доступа и планшеты
+        "192.168.4.1",       # Raspberry Pi WiFi AP
+        "192.168.4.*",       # Все устройства в WiFi сети
+        "192.168.4.2",
+        "192.168.4.3",
+        "192.168.4.4",
+        "192.168.4.5",
+        "192.168.4.6",
+        "192.168.4.7",
+        "192.168.4.8",
+        "192.168.4.9",
+        "192.168.4.10"
     ]
     
-    # QR Code
-    qr_base_url: str = "http://192.168.1.100:8000/menu"
+    # QR Code - URL для WiFi точки доступа
+    qr_base_url: str = "http://192.168.4.1:8000/menu"
     
     # File Upload
     upload_dir: str = "./uploads"
@@ -118,8 +132,23 @@ class Settings(BaseSettings):
                 print(f"🔧 CORS Origins загружены из строки: {origins}")
             return origins
         elif isinstance(v, list):
+            # Добавляем автоматически всю подсеть WiFi точки доступа
+            wifi_subnet_origins = []
+            for i in range(1, 21):  # IP от 192.168.4.1 до 192.168.4.20
+                ip = f"192.168.4.{i}"
+                wifi_subnet_origins.extend([
+                    f"http://{ip}:8000",
+                    f"http://{ip}:3000", 
+                    f"http://{ip}:5173",
+                    f"http://{ip}"  # Без порта
+                ])
+            
+            # Объединяем оригинальный список с WiFi подсетью
+            final_origins = list(v) + wifi_subnet_origins
+            
             if os.getenv("DEBUG", "false").lower() == "true":
-                print(f"🔧 CORS Origins загружены как список: {v}")
+                print(f"🔧 CORS Origins загружены как список: {final_origins}")
+            return final_origins
             return v
         else:
             if os.getenv("DEBUG", "false").lower() == "true":
