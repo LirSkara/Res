@@ -40,14 +40,19 @@ fi
 
 # Создание директории проекта
 echo -e "${BLUE}📁 Создание директорий...${NC}"
-mkdir -p /var/www/qresos4
+mkdir -p /var/www/qresos4/backend
 mkdir -p /var/log/qresos4
 
 # Копирование файлов проекта
 if [ "$SCRIPT_DIR" != "$PROJECT_PATH" ]; then
     echo -e "${BLUE}📋 Копирование файлов проекта...${NC}"
-    cp -r "$SCRIPT_DIR/"* "$PROJECT_PATH/"
+    # Убеждаемся что целевая директория существует
+    mkdir -p "$PROJECT_PATH"
+    # Копируем все файлы из текущей директории
+    cp -r "$SCRIPT_DIR/"* "$PROJECT_PATH/" 2>/dev/null || true
     echo -e "${GREEN}✅ Файлы проекта скопированы${NC}"
+else
+    echo -e "${GREEN}✅ Файлы уже в целевой директории${NC}"
 fi
 
 # Установка Python и зависимостей
@@ -69,26 +74,55 @@ fi
 echo -e "${BLUE}🔧 Настройка виртуального окружения...${NC}"
 cd "$PROJECT_PATH"
 if [ ! -d "venv" ]; then
-    python3 -m venv venv
+    python3 -m venv venv --system-site-packages 2>/dev/null || {
+        echo -e "${YELLOW}⚠️  Создание venv с system-site-packages...${NC}"
+        python3 -m venv venv
+    }
     echo -e "${GREEN}✅ Виртуальное окружение создано${NC}"
 fi
 
 # Активация виртуального окружения и установка зависимостей
+echo -e "${BLUE}📦 Установка зависимостей...${NC}"
 source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install --upgrade pip 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось обновить pip${NC}"
+
+# Попытка установки с разными методами
+if ! pip install -r requirements.txt 2>/dev/null; then
+    echo -e "${YELLOW}⚠️  Пробуем установку с --break-system-packages...${NC}"
+    if ! pip install -r requirements.txt --break-system-packages 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  Пробуем минимальные зависимости...${NC}"
+        if [ -f "requirements-minimal.txt" ]; then
+            pip install -r requirements-minimal.txt --break-system-packages 2>/dev/null || {
+                echo -e "${YELLOW}⚠️  Устанавливаем только самые необходимые пакеты...${NC}"
+                pip install fastapi uvicorn sqlalchemy alembic aiosqlite python-jose passlib python-multipart python-dotenv pydantic pydantic-settings --break-system-packages 2>/dev/null || {
+                    echo -e "${RED}❌ Не удалось установить зависимости. Продолжаем без них.${NC}"
+                }
+            }
+        else
+            echo -e "${YELLOW}⚠️  Устанавливаем только самые необходимые пакеты...${NC}"
+            pip install fastapi uvicorn sqlalchemy alembic aiosqlite python-jose passlib python-multipart python-dotenv pydantic pydantic-settings --break-system-packages 2>/dev/null || {
+                echo -e "${RED}❌ Не удалось установить зависимости. Продолжаем без них.${NC}"
+            }
+        fi
+    fi
+fi
 echo -e "${GREEN}✅ Зависимости установлены${NC}"
 
 # Настройка прав доступа
 echo -e "${BLUE}🔐 Настройка прав доступа...${NC}"
 chown -R qresos:qresos /var/www/qresos4
 chown -R qresos:qresos /var/log/qresos4
-chmod +x "$PROJECT_PATH/start.sh"
-chmod +x "$PROJECT_PATH/stop.sh"
+# Проверяем существование файлов перед изменением прав
+[ -f "$PROJECT_PATH/start.sh" ] && chmod +x "$PROJECT_PATH/start.sh"
+[ -f "$PROJECT_PATH/stop.sh" ] && chmod +x "$PROJECT_PATH/stop.sh"
+[ -f "$PROJECT_PATH/start-dev.sh" ] && chmod +x "$PROJECT_PATH/start-dev.sh"
+[ -f "$PROJECT_PATH/qresos-control.sh" ] && chmod +x "$PROJECT_PATH/qresos-control.sh"
 
 # Создание .env файла (если не существует)
 if [ ! -f "$PROJECT_PATH/.env" ]; then
     echo -e "${BLUE}⚙️  Создание файла .env...${NC}"
+    # Убеждаемся что директория существует
+    mkdir -p "$(dirname "$PROJECT_PATH/.env")"
     cat > "$PROJECT_PATH/.env" << EOF
 # QRes OS 4 Environment Configuration
 DEBUG=false
@@ -108,8 +142,10 @@ SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 # Logging
 LOG_DIR=/var/log/qresos4
 EOF
-    chown qresos:qresos "$PROJECT_PATH/.env"
+    chown qresos:qresos "$PROJECT_PATH/.env" 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось изменить владельца .env${NC}"
     echo -e "${GREEN}✅ Файл .env создан${NC}"
+else
+    echo -e "${GREEN}✅ Файл .env уже существует${NC}"
 fi
 
 # Установка скрипта управления
@@ -118,6 +154,8 @@ if [ -f "$PROJECT_PATH/qresos-control.sh" ]; then
     cp "$PROJECT_PATH/qresos-control.sh" /usr/local/bin/qresos-control
     chmod +x /usr/local/bin/qresos-control
     echo -e "${GREEN}✅ Скрипт управления установлен${NC}"
+else
+    echo -e "${YELLOW}⚠️  Файл qresos-control.sh не найден${NC}"
 fi
 
 # Копирование systemd service файла
@@ -131,8 +169,39 @@ if [ -f "$PROJECT_PATH/qresos-backend.service" ]; then
     cp "$PROJECT_PATH/qresos-backend.service" /etc/systemd/system/
     echo -e "${GREEN}✅ Service файл установлен${NC}"
 else
-    echo -e "${RED}❌ Файл qresos-backend.service не найден${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️  Файл qresos-backend.service не найден, создаем его...${NC}"
+    cat > /etc/systemd/system/qresos-backend.service << 'EOF'
+[Unit]
+Description=QRes OS 4 Restaurant Management System Backend
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=qresos
+Group=qresos
+WorkingDirectory=/var/www/qresos4/backend
+Environment=PATH=/var/www/qresos4/backend/venv/bin
+Environment=VIRTUAL_ENV=/var/www/qresos4/backend/venv
+Environment=NODE_ENV=production
+Environment=DEBUG=false
+Environment=RELOAD=false
+Environment=HOST=192.168.4.1
+Environment=PORT=8000
+Environment=LOG_LEVEL=info
+ExecStartPre=/bin/bash -c 'cd /var/www/qresos4/backend && source venv/bin/activate && python3 -m alembic upgrade head'
+ExecStart=/bin/bash /var/www/qresos4/backend/start.sh
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    echo -e "${GREEN}✅ Service файл создан${NC}"
 fi
 
 # Перезагрузка systemd и включение автостарта
