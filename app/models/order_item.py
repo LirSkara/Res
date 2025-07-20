@@ -5,6 +5,7 @@ QRes OS 4 - OrderItem Model
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from sqlalchemy import inspect
 from typing import Optional, TYPE_CHECKING
 from decimal import Decimal
 from datetime import datetime
@@ -120,4 +121,48 @@ class OrderItem(Base):
     )
     
     def __repr__(self) -> str:
-        return f"<OrderItem(id={self.id}, order_id={self.order_id}, dish_id={self.dish_id}, quantity={self.quantity})>"
+        # Безопасное получение атрибутов для объектов, не привязанных к сессии
+        try:
+            # Проверяем, привязан ли объект к сессии
+            state = inspect(self)
+            if hasattr(state, 'session') and state.session is not None:
+                # Объект привязан к сессии, можем безопасно получить значения
+                return f"<OrderItem(id={self.id}, order_id={self.order_id}, dish_id={self.dish_id}, quantity={self.quantity})>"
+            else:
+                # Объект не привязан к сессии, используем базовое представление
+                return f"<OrderItem object at {hex(id(self))}>"
+        except Exception:
+            # В случае любой ошибки возвращаем базовое представление
+            return f"<OrderItem object at {hex(id(self))}>"
+    
+    @property
+    def dish_name(self) -> str:
+        """Название блюда"""
+        try:
+            return self.dish.name if self.dish else "Неизвестное блюдо"
+        except Exception:
+            return "Неизвестное блюдо"
+    
+    @property
+    def dish_image_url(self) -> Optional[str]:
+        """URL изображения блюда"""
+        try:
+            return self.dish.image_url if self.dish else None
+        except Exception:
+            return None
+    
+    @property
+    def dish_cooking_time(self) -> Optional[int]:
+        """Время приготовления блюда"""
+        try:
+            return self.dish.cooking_time if self.dish else None
+        except Exception:
+            return None
+    
+    @property
+    def dish_department(self) -> KitchenDepartment:
+        """Кухонный цех блюда"""
+        try:
+            return self.dish.department if self.dish else KitchenDepartment.HOT_KITCHEN
+        except Exception:
+            return KitchenDepartment.HOT_KITCHEN

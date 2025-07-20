@@ -5,6 +5,7 @@ QRes OS 4 - Order Models
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Enum as SQLEnum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from sqlalchemy import inspect
 from typing import Optional, List, TYPE_CHECKING
 from decimal import Decimal
 from datetime import datetime
@@ -138,4 +139,40 @@ class Order(Base):
     )
     
     def __repr__(self) -> str:
-        return f"<Order(id={self.id}, table_id={self.table_id}, status='{self.status}')>"
+        # Безопасное получение атрибутов для объектов, не привязанных к сессии
+        try:
+            # Проверяем, привязан ли объект к сессии
+            state = inspect(self)
+            if hasattr(state, 'session') and state.session is not None:
+                # Объект привязан к сессии, можем безопасно получить значения
+                return f"<Order(id={self.id}, table_id={self.table_id}, status='{self.status}')>"
+            else:
+                # Объект не привязан к сессии, используем базовое представление
+                return f"<Order object at {hex(id(self))}>"
+        except Exception:
+            # В случае любой ошибки возвращаем базовое представление
+            return f"<Order object at {hex(id(self))}>"
+    
+    @property
+    def table_number(self) -> Optional[int]:
+        """Номер столика"""
+        try:
+            return self.table.number if self.table else None
+        except Exception:
+            return None
+    
+    @property
+    def waiter_name(self) -> str:
+        """Имя официанта"""
+        try:
+            return self.waiter.username if self.waiter else "Неизвестно"
+        except Exception:
+            return "Неизвестно"
+    
+    @property
+    def payment_method_name(self) -> Optional[str]:
+        """Название способа оплаты"""
+        try:
+            return self.payment_method.name if self.payment_method else None
+        except Exception:
+            return None
