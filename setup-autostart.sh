@@ -23,25 +23,25 @@ echo ""
 
 # Получение текущего пути проекта
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_PATH="/var/www/qresos4/backend"
+PROJECT_PATH="/home/admin/qresos/backend"
 
 echo -e "${BLUE}📁 Текущая директория скрипта: ${YELLOW}$SCRIPT_DIR${NC}"
 echo -e "${BLUE}📁 Целевая директория проекта: ${YELLOW}$PROJECT_PATH${NC}"
 echo ""
 
 # Создание пользователя для веб-сервиса (если не существует)
-if ! id "qresos" &>/dev/null; then
-    echo -e "${BLUE}👤 Создание пользователя qresos...${NC}"
-    useradd --system --home /var/www/qresos4 --shell /bin/bash qresos
-    echo -e "${GREEN}✅ Пользователь qresos создан${NC}"
+if ! id "admin" &>/dev/null; then
+    echo -e "${BLUE}👤 Создание пользователя admin...${NC}"
+    useradd --create-home --shell /bin/bash admin
+    echo -e "${GREEN}✅ Пользователь admin создан${NC}"
 else
-    echo -e "${GREEN}✅ Пользователь qresos уже существует${NC}"
+    echo -e "${GREEN}✅ Пользователь admin уже существует${NC}"
 fi
 
 # Создание директории проекта
 echo -e "${BLUE}📁 Создание директорий...${NC}"
-mkdir -p /var/www/qresos4/backend
-mkdir -p /var/log/qresos4
+mkdir -p /home/admin/qresos/backend
+mkdir -p /home/admin/qresos/logs
 
 # Копирование файлов проекта
 if [ "$SCRIPT_DIR" != "$PROJECT_PATH" ]; then
@@ -110,8 +110,7 @@ echo -e "${GREEN}✅ Зависимости установлены${NC}"
 
 # Настройка прав доступа
 echo -e "${BLUE}🔐 Настройка прав доступа...${NC}"
-chown -R qresos:qresos /var/www/qresos4
-chown -R qresos:qresos /var/log/qresos4
+chown -R admin:admin /home/admin/qresos
 # Проверяем существование файлов перед изменением прав
 [ -f "$PROJECT_PATH/start.sh" ] && chmod +x "$PROJECT_PATH/start.sh"
 [ -f "$PROJECT_PATH/stop.sh" ] && chmod +x "$PROJECT_PATH/stop.sh"
@@ -142,7 +141,7 @@ SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 # Logging
 LOG_DIR=/var/log/qresos4
 EOF
-    chown qresos:qresos "$PROJECT_PATH/.env" 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось изменить владельца .env${NC}"
+    chown admin:admin "$PROJECT_PATH/.env" 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось изменить владельца .env${NC}"
     echo -e "${GREEN}✅ Файл .env создан${NC}"
 else
     echo -e "${GREEN}✅ Файл .env уже существует${NC}"
@@ -163,8 +162,10 @@ echo -e "${BLUE}⚙️  Установка systemd service...${NC}"
 if [ -f "$PROJECT_PATH/qresos-backend.service" ]; then
     # Обновление путей в service файле
     sed -i "s|/var/www/qresos4/backend|$PROJECT_PATH|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|User=www-data|User=qresos|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|Group=www-data|Group=qresos|g" "$PROJECT_PATH/qresos-backend.service"
+    sed -i "s|User=www-data|User=admin|g" "$PROJECT_PATH/qresos-backend.service"
+    sed -i "s|Group=www-data|Group=admin|g" "$PROJECT_PATH/qresos-backend.service"
+    sed -i "s|User=qresos|User=admin|g" "$PROJECT_PATH/qresos-backend.service"
+    sed -i "s|Group=qresos|Group=admin|g" "$PROJECT_PATH/qresos-backend.service"
     
     cp "$PROJECT_PATH/qresos-backend.service" /etc/systemd/system/
     echo -e "${GREEN}✅ Service файл установлен${NC}"
@@ -178,19 +179,19 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=qresos
-Group=qresos
-WorkingDirectory=/var/www/qresos4/backend
-Environment=PATH=/var/www/qresos4/backend/venv/bin
-Environment=VIRTUAL_ENV=/var/www/qresos4/backend/venv
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/qresos/backend
+Environment=PATH=/home/admin/qresos/backend/venv/bin
+Environment=VIRTUAL_ENV=/home/admin/qresos/backend/venv
 Environment=NODE_ENV=production
 Environment=DEBUG=false
 Environment=RELOAD=false
 Environment=HOST=192.168.4.1
 Environment=PORT=8000
 Environment=LOG_LEVEL=info
-ExecStartPre=/bin/bash -c 'cd /var/www/qresos4/backend && source venv/bin/activate && python3 -m alembic upgrade head'
-ExecStart=/bin/bash /var/www/qresos4/backend/start.sh
+ExecStartPre=/bin/bash -c 'cd /home/admin/qresos/backend && source venv/bin/activate && python3 -m alembic upgrade head'
+ExecStart=/bin/bash /home/admin/qresos/backend/start.sh
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5

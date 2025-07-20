@@ -29,11 +29,11 @@ pip install --break-system-packages -r requirements.txt
 
 ```bash
 # Создание директории вручную
-sudo mkdir -p /var/www/qresos4/backend
-sudo chown -R qresos:qresos /var/www/qresos4
+sudo mkdir -p /home/admin/qresos/backend
+sudo chown -R admin:admin /home/admin/qresos
 
 # Проверка прав
-ls -la /var/www/
+ls -la /home/admin/
 ```
 
 ### 3. Ошибка "Can't assign requested address"
@@ -106,9 +106,11 @@ sudo systemctl status qresos-backend
 # Логи сервиса
 sudo journalctl -u qresos-backend -f
 
+```bash
 # Проверка файлов
-ls -la /var/www/qresos4/backend/
+ls -la /home/admin/qresos/backend/
 ls -la /etc/systemd/system/qresos-backend.service
+```
 ```
 
 ### Проверка сети
@@ -135,7 +137,7 @@ sudo systemctl stop qresos-backend
 sudo systemctl disable qresos-backend
 
 # Удаление файлов
-sudo rm -rf /var/www/qresos4
+sudo rm -rf /home/admin/qresos
 sudo rm -f /etc/systemd/system/qresos-backend.service
 sudo rm -f /usr/local/bin/qresos-control
 
@@ -153,11 +155,11 @@ sudo ./setup-autostart.sh
 sudo systemctl stop qresos-backend
 
 # Удаление базы данных
-sudo rm -f /var/www/qresos4/backend/app.db
+sudo rm -f /home/admin/qresos/backend/app.db
 
 # Применение миграций заново
-cd /var/www/qresos4/backend
-sudo -u qresos bash -c "source venv/bin/activate && python3 -m alembic upgrade head"
+cd /home/admin/qresos/backend
+sudo -u admin bash -c "source venv/bin/activate && python3 -m alembic upgrade head"
 
 # Запуск сервиса
 sudo systemctl start qresos-backend
@@ -186,7 +188,7 @@ sudo journalctl -u qresos-backend --since "1 hour ago"
 
 ```bash
 # Просмотр таблиц (SQLite)
-sudo -u qresos sqlite3 /var/www/qresos4/backend/app.db ".tables"
+sudo -u admin sqlite3 /home/admin/qresos/backend/app.db ".tables"
 
 # Создание бэкапа
 sudo qresos-control backup
@@ -207,8 +209,8 @@ sudo ss -tulpn | grep :8000
 sudo lsof -i :8000
 
 # Место на диске
-df -h /var/www/qresos4
-du -sh /var/www/qresos4
+df -h /home/admin/qresos
+du -sh /home/admin/qresos
 ```
 
 ## 🆘 Получение помощи
@@ -228,9 +230,7 @@ du -sh /var/www/qresos4
    ```
 
 3. Проверьте конфигурацию:
-   ```bash
-   cat /var/www/qresos4/backend/.env
-   cat /etc/systemd/system/qresos-backend.service
-   ```
-
-4. Опишите проблему с приложением собранной информации.
+```bash
+cat /home/admin/qresos/backend/.env
+cat /etc/systemd/system/qresos-backend.service
+```4. Опишите проблему с приложением собранной информации.

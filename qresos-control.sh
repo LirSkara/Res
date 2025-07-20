@@ -12,7 +12,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 SERVICE_NAME="qresos-backend"
-PROJECT_PATH="/var/www/qresos4/backend"
+PROJECT_PATH="/home/admin/qresos/backend"
 FIXED_IP="192.168.4.1"
 PORT="8000"
 
@@ -58,7 +58,7 @@ case "$1" in
     info)
         echo -e "${CYAN}📡 Информация о QRes OS 4:${NC}"
         echo -e "   Путь к проекту: $PROJECT_PATH"
-        echo -e "   Пользователь: qresos"
+        echo -e "   Пользователь: admin"
         echo -e "   Фиксированный IP: $FIXED_IP"
         echo -e "   Порт: $PORT"
         echo -e "   Автозапуск: $(systemctl is-enabled $SERVICE_NAME 2>/dev/null || echo 'отключен')"
@@ -88,7 +88,7 @@ case "$1" in
         ;;
     backup)
         echo -e "${BLUE}💾 Создание резервной копии базы данных...${NC}"
-        BACKUP_DIR="/var/backups/qresos4"
+        BACKUP_DIR="/home/admin/qresos/backups"
         mkdir -p $BACKUP_DIR
         TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
         cp "$PROJECT_PATH/app.db" "$BACKUP_DIR/app_backup_$TIMESTAMP.db"
