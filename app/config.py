@@ -50,38 +50,14 @@ class Settings(BaseSettings):
     debug: bool = True
     reload: bool = True
     
-    # CORS - Конфигурируем origins в зависимости от окружения
+    # CORS - ВРЕМЕННО РАЗРЕШАЕМ ВСЕ СОЕДИНЕНИЯ (для отладки)
     cors_origins: List[str] = [
-        # Разработка (localhost)
-        "http://localhost:5173", 
-        "http://127.0.0.1:5173",
-        "http://localhost:5174", 
-        "http://127.0.0.1:5174",
-        "http://localhost:5175", 
-        "http://127.0.0.1:5175", 
-        "http://localhost:4173", 
-        "http://127.0.0.1:4173",
-        "http://localhost:4174", 
-        "http://127.0.0.1:4174",
-        "http://localhost:4175", 
-        "http://127.0.0.1:4175",
-        "http://localhost:3002", 
-        "http://127.0.0.1:3002",
-        "http://localhost:3000", 
-        "http://127.0.0.1:3000",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080"
-        # WiFi подсеть 192.168.4.0/24 добавляется автоматически валидатором
+        "*"  # Разрешаем все origins временно
     ]
     
-    # Trusted Hosts - Разрешенные хосты для защиты от Host Header Injection
+    # Trusted Hosts - ВРЕМЕННО РАЗРЕШАЕМ ВСЕ ХОСТЫ (для отладки)
     allowed_hosts: List[str] = [
-        "localhost",
-        "127.0.0.1", 
-        "0.0.0.0",           # Для разработки
-        "192.168.1.100",     # Локальная сеть для QR кодов
-        "*.localhost"        # Поддомены localhost
-        # WiFi подсеть 192.168.4.0/24 добавляется автоматически валидатором
+        "*"  # Разрешаем все хосты временно
     ]
     
     # QR Code - URL для WiFi точки доступа
@@ -107,8 +83,12 @@ class Settings(BaseSettings):
     
     @validator('allowed_hosts', allow_reuse=True)
     def expand_allowed_hosts(cls, v) -> List[str]:
-        """Автоматически добавляем WiFi подсеть в allowed hosts"""
-        # Добавляем все IP адреса WiFi подсети
+        """ВРЕМЕННО: Разрешаем все хосты для отладки"""
+        # Если установлен wildcard, возвращаем как есть
+        if v == ["*"]:
+            return v
+        
+        # Автоматически добавляем WiFi подсеть в allowed hosts
         wifi_ips = [f"192.168.4.{i}" for i in range(1, 21)]
         expanded_hosts = list(v) + wifi_ips
         
@@ -127,7 +107,11 @@ class Settings(BaseSettings):
 
     @validator('cors_origins', pre=True, allow_reuse=True)
     def parse_cors_origins(cls, v) -> List[str]:
-        """Парсинг CORS origins из переменной окружения или списка"""
+        """ВРЕМЕННО: Разрешаем все origins для отладки"""
+        # Если установлен wildcard, возвращаем как есть
+        if v == ["*"]:
+            return v
+            
         if isinstance(v, str):
             # Удаляем возможные JSON скобки и кавычки
             v = v.strip().strip('[]"\'')
