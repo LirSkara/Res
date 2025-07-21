@@ -74,19 +74,8 @@ class Settings(BaseSettings):
         "127.0.0.1", 
         "0.0.0.0",           # Для разработки
         "192.168.1.100",     # Локальная сеть для QR кодов
-        "*.localhost",       # Поддомены localhost
-        # WiFi точка доступа и планшеты
-        "192.168.4.1",       # Raspberry Pi WiFi AP
-        "192.168.4.*",       # Все устройства в WiFi сети
-        "192.168.4.2",
-        "192.168.4.3",
-        "192.168.4.4",
-        "192.168.4.5",
-        "192.168.4.6",
-        "192.168.4.7",
-        "192.168.4.8",
-        "192.168.4.9",
-        "192.168.4.10"
+        "*.localhost"        # Поддомены localhost
+        # WiFi подсеть 192.168.4.0/24 добавляется автоматически валидатором
     ]
     
     # QR Code - URL для WiFi точки доступа
@@ -110,6 +99,26 @@ class Settings(BaseSettings):
     restaurant_name: str = "QRes OS 4 Restaurant"
     restaurant_timezone: str = "Europe/Moscow"
     
+    @validator('allowed_hosts', allow_reuse=True)
+    def expand_allowed_hosts(cls, v) -> List[str]:
+        """Автоматически добавляем WiFi подсеть в allowed hosts"""
+        # Добавляем все IP адреса WiFi подсети
+        wifi_ips = [f"192.168.4.{i}" for i in range(1, 21)]
+        expanded_hosts = list(v) + wifi_ips
+        
+        # Убираем дубликаты, сохраняя порядок
+        seen = set()
+        unique_hosts = []
+        for host in expanded_hosts:
+            if host not in seen:
+                seen.add(host)
+                unique_hosts.append(host)
+        
+        if os.getenv("DEBUG", "false").lower() == "true":
+            print(f"🔧 Allowed Hosts расширены: {unique_hosts}")
+        
+        return unique_hosts
+
     @validator('cors_origins', pre=True, allow_reuse=True)
     def parse_cors_origins(cls, v) -> List[str]:
         """Парсинг CORS origins из переменной окружения или списка"""
@@ -149,7 +158,6 @@ class Settings(BaseSettings):
             if os.getenv("DEBUG", "false").lower() == "true":
                 print(f"🔧 CORS Origins загружены как список: {final_origins}")
             return final_origins
-            return v
         else:
             if os.getenv("DEBUG", "false").lower() == "true":
                 print(f"⚠️ Неожиданный тип CORS Origins: {type(v)}, значение: {v}")
