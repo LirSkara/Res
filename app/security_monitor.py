@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from fastapi import Request, HTTPException
 from .security_logger import security_logger
+from .config import settings
 
 
 class SecurityMonitor:
@@ -21,11 +22,12 @@ class SecurityMonitor:
         self.suspicious_requests = defaultdict(int)  # IP -> количество подозрительных запросов
         self.blocked_ips = {}  # IP -> время блокировки
         
-        # Настройки
+        # Настройки из конфигурации
         self.max_failed_logins = 5  # Максимум неудачных попыток входа
         self.login_window = 300  # Окно в секундах (5 минут)
-        self.max_requests_per_minute = 100  # Максимум запросов в минуту
-        self.block_duration = 3600  # Время блокировки в секундах (1 час)
+        self.max_requests_per_minute = settings.rate_limit_max_requests  # Используем настройки из config.py
+        self.rate_limit_window = settings.rate_limit_window  # Временное окно из настроек
+        self.block_duration = settings.rate_limit_block_duration  # Время блокировки из настроек
         self.suspicious_threshold = 10  # Порог подозрительной активности
         
         # Паттерны подозрительной активности
@@ -79,9 +81,9 @@ class SecurityMonitor:
         if self.is_ip_blocked(ip):
             raise HTTPException(status_code=429, detail="IP адрес временно заблокирован")
         
-        # Очищаем старые записи запросов
+        # Очищаем старые записи запросов (используем настроенное временное окно)
         while (self.request_counts[ip] and 
-               current_time - self.request_counts[ip][0] > 60):
+               current_time - self.request_counts[ip][0] > self.rate_limit_window):
             self.request_counts[ip].popleft()
         
         # Добавляем новый запрос
@@ -89,7 +91,7 @@ class SecurityMonitor:
         
         # Проверяем превышение лимита запросов
         if len(self.request_counts[ip]) > self.max_requests_per_minute:
-            self.block_ip(ip, "Превышен лимит запросов в минуту")
+            self.block_ip(ip, f"Превышен лимит запросов: {len(self.request_counts[ip])} за {self.rate_limit_window} секунд")
             security_logger.log_rate_limit_exceeded(ip, len(self.request_counts[ip]))
             raise HTTPException(status_code=429, detail="Превышен лимит запросов")
         
@@ -181,10 +183,10 @@ class SecurityMonitor:
             if not self.failed_logins[ip]:
                 del self.failed_logins[ip]
         
-        # Очищаем старые записи запросов
+        # Очищаем старые записи запросов (используем настроенное временное окно)
         for ip in list(self.request_counts.keys()):
             while (self.request_counts[ip] and 
-                   current_time - self.request_counts[ip][0] > 60):
+                   current_time - self.request_counts[ip][0] > self.rate_limit_window):
                 self.request_counts[ip].popleft()
             
             if not self.request_counts[ip]:
