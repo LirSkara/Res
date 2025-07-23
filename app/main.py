@@ -249,7 +249,8 @@ async def security_headers_middleware(request: Request, call_next):
         response.headers["X-Debug-Mode"] = "enabled"
     else:
         # В продакшене скрываем версию сервера
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
     
     return response
 
