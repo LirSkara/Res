@@ -3,7 +3,48 @@
 # QRes OS 4 - Service Management Script
 # ====================================
 
-# Установка цветов для вывода
+# Устанshow_logs() {
+    check_service_exists
+    echo -e "${BLUE}📝 Логи сервиса $SERVICE_NAME:${NC}"
+    echo -e "${YELLOW}Нажмите Ctrl+C для выхода${NC}"
+    echo ""
+    sudo journalctl -u "$SERVICE_NAME" -f
+}
+
+show_project_info() {
+    echo -e "${BLUE}==================================================${NC}"
+    echo -e "${GREEN}🍽️  QRes OS 4 - Информация о проекте${NC}"
+    echo -e "${BLUE}==================================================${NC}"
+    echo ""
+    
+    # Получаем информацию о сервисе
+    if systemctl list-unit-files | grep -q "$SERVICE_NAME.service"; then
+        PROJECT_PATH=$(systemctl show "$SERVICE_NAME" -p WorkingDirectory --value 2>/dev/null || echo "Не определен")
+        echo -e "${GREEN}📂 Путь к проекту: ${YELLOW}$PROJECT_PATH${NC}"
+        
+        if [ -f "$PROJECT_PATH/.env" ]; then
+            PORT=$(grep "^PORT=" "$PROJECT_PATH/.env" 2>/dev/null | cut -d'=' -f2 || echo "8000")
+            echo -e "${GREEN}🌐 Порт: ${YELLOW}$PORT${NC}"
+        fi
+        
+        # Проверяем доступность API
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo -e "${GREEN}📡 API доступен по адресу:${NC}"
+            if ip addr show | grep -q "192.168.4.1"; then
+                echo -e "   ${YELLOW}http://192.168.4.1:${PORT:-8000}${NC}"
+                echo -e "   ${YELLOW}http://192.168.4.1:${PORT:-8000}/docs${NC} (документация)"
+            else
+                echo -e "   ${YELLOW}http://127.0.0.1:${PORT:-8000}${NC}"
+                echo -e "   ${YELLOW}http://127.0.0.1:${PORT:-8000}/docs${NC} (документация)"
+            fi
+        else
+            echo -e "${RED}❌ API недоступен (сервис остановлен)${NC}"
+        fi
+    else
+        echo -e "${RED}❌ Сервис не установлен${NC}"
+    fi
+    echo ""
+}етов для вывода
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
@@ -28,6 +69,7 @@ show_help() {
     echo -e "  ${YELLOW}logs${NC}      - Показать логи сервиса"
     echo -e "  ${YELLOW}enable${NC}    - Включить автостарт"
     echo -e "  ${YELLOW}disable${NC}   - Отключить автостарт"
+    echo -e "  ${YELLOW}info${NC}      - Показать информацию о проекте"
     echo -e "  ${YELLOW}install${NC}   - Установить/переустановить сервис"
     echo -e "  ${YELLOW}uninstall${NC} - Удалить сервис"
     echo -e "  ${YELLOW}help${NC}      - Показать эту справку"
@@ -186,6 +228,9 @@ case "$1" in
         ;;
     disable)
         disable_autostart
+        ;;
+    info)
+        show_project_info
         ;;
     install)
         install_service

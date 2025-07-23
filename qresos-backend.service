@@ -8,15 +8,14 @@ Type=simple
 User=admin
 Group=admin
 WorkingDirectory=/home/admin/qresos/backend
-Environment=PATH=/home/admin/qresos/backend/venv/bin
+Environment=PATH=/home/admin/qresos/backend/venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=VIRTUAL_ENV=/home/admin/qresos/backend/venv
 Environment=NODE_ENV=production
 Environment=DEBUG=false
 Environment=RELOAD=false
-Environment=HOST=192.168.4.1
 Environment=PORT=8000
 Environment=LOG_LEVEL=info
-ExecStartPre=/bin/bash -c 'cd /home/admin/qresos/backend && source venv/bin/activate && python3 -m alembic upgrade head'
+ExecStartPre=/bin/bash -c 'cd /home/admin/qresos/backend && if [ -d "venv" ]; then source venv/bin/activate; fi && python3 -m alembic upgrade head'
 ExecStart=/bin/bash /home/admin/qresos/backend/start.sh
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed

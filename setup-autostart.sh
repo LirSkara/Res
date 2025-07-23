@@ -23,36 +23,38 @@ echo ""
 
 # Получение текущего пути проекта
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_PATH="/home/admin/qresos/backend"
+PROJECT_PATH="$SCRIPT_DIR"
 
-echo -e "${BLUE}📁 Текущая директория скрипта: ${YELLOW}$SCRIPT_DIR${NC}"
-echo -e "${BLUE}📁 Целевая директория проекта: ${YELLOW}$PROJECT_PATH${NC}"
+echo -e "${BLUE}📁 Директория проекта: ${YELLOW}$PROJECT_PATH${NC}"
 echo ""
+
+# Проверка, что мы находимся в правильной директории
+if [ ! -f "$PROJECT_PATH/app/main.py" ]; then
+    echo -e "${RED}❌ Файл app/main.py не найден в $PROJECT_PATH${NC}"
+    echo -e "${RED}   Убедитесь, что скрипт запускается из корня проекта backend${NC}"
+    exit 1
+fi
 
 # Создание пользователя для веб-сервиса (если не существует)
 if ! id "admin" &>/dev/null; then
     echo -e "${BLUE}👤 Создание пользователя admin...${NC}"
     useradd --create-home --shell /bin/bash admin
+    usermod -aG sudo admin  # Добавляем в группу sudo для управления
     echo -e "${GREEN}✅ Пользователь admin создан${NC}"
 else
     echo -e "${GREEN}✅ Пользователь admin уже существует${NC}"
 fi
 
-# Создание директории проекта
-echo -e "${BLUE}📁 Создание директорий...${NC}"
-mkdir -p /home/admin/qresos/backend
-mkdir -p /home/admin/qresos/logs
-
-# Копирование файлов проекта
-if [ "$SCRIPT_DIR" != "$PROJECT_PATH" ]; then
-    echo -e "${BLUE}📋 Копирование файлов проекта...${NC}"
-    # Убеждаемся что целевая директория существует
-    mkdir -p "$PROJECT_PATH"
-    # Копируем все файлы из текущей директории
-    cp -r "$SCRIPT_DIR/"* "$PROJECT_PATH/" 2>/dev/null || true
-    echo -e "${GREEN}✅ Файлы проекта скопированы${NC}"
-else
-    echo -e "${GREEN}✅ Файлы уже в целевой директории${NC}"
+# Убеждаемся, что пользователь admin может читать проект
+echo -e "${BLUE}� Настройка прав доступа к проекту...${NC}"
+# Если проект не в домашней директории admin, настраиваем права
+if [[ "$PROJECT_PATH" != "/home/admin"* ]]; then
+    # Создаем символическую ссылку для удобства
+    sudo -u admin ln -sfn "$PROJECT_PATH" "/home/admin/qresos-backend" 2>/dev/null || true
+    # Даем права пользователю admin на чтение директории проекта
+    chmod -R 755 "$PROJECT_PATH"
+    # Убеждаемся что admin может выполнять скрипты
+    chmod +x "$PROJECT_PATH"/*.sh 2>/dev/null || true
 fi
 
 # Установка Python и зависимостей
@@ -109,19 +111,22 @@ fi
 echo -e "${GREEN}✅ Зависимости установлены${NC}"
 
 # Настройка прав доступа
-echo -e "${BLUE}🔐 Настройка прав доступа...${NC}"
-chown -R admin:admin /home/admin/qresos
+echo -e "${BLUE}🔐 Финальная настройка прав доступа...${NC}"
 # Проверяем существование файлов перед изменением прав
 [ -f "$PROJECT_PATH/start.sh" ] && chmod +x "$PROJECT_PATH/start.sh"
 [ -f "$PROJECT_PATH/stop.sh" ] && chmod +x "$PROJECT_PATH/stop.sh"
 [ -f "$PROJECT_PATH/start-dev.sh" ] && chmod +x "$PROJECT_PATH/start-dev.sh"
 [ -f "$PROJECT_PATH/qresos-control.sh" ] && chmod +x "$PROJECT_PATH/qresos-control.sh"
+[ -f "$PROJECT_PATH/manage-service.sh" ] && chmod +x "$PROJECT_PATH/manage-service.sh"
+
+# Если проект в домашней директории admin, устанавливаем владельца
+if [[ "$PROJECT_PATH" == "/home/admin"* ]]; then
+    chown -R admin:admin "$PROJECT_PATH"
+fi
 
 # Создание .env файла (если не существует)
 if [ ! -f "$PROJECT_PATH/.env" ]; then
     echo -e "${BLUE}⚙️  Создание файла .env...${NC}"
-    # Убеждаемся что директория существует
-    mkdir -p "$(dirname "$PROJECT_PATH/.env")"
     cat > "$PROJECT_PATH/.env" << EOF
 # QRes OS 4 Environment Configuration
 DEBUG=false
@@ -141,7 +146,10 @@ SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 # Logging
 LOG_DIR=/var/log/qresos4
 EOF
-    chown admin:admin "$PROJECT_PATH/.env" 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось изменить владельца .env${NC}"
+    # Устанавливаем права доступа только если файл в домашней директории admin
+    if [[ "$PROJECT_PATH" == "/home/admin"* ]]; then
+        chown admin:admin "$PROJECT_PATH/.env" 2>/dev/null || echo -e "${YELLOW}⚠️  Не удалось изменить владельца .env${NC}"
+    fi
     echo -e "${GREEN}✅ Файл .env создан${NC}"
 else
     echo -e "${GREEN}✅ Файл .env уже существует${NC}"
@@ -160,18 +168,22 @@ fi
 # Копирование systemd service файла
 echo -e "${BLUE}⚙️  Установка systemd service...${NC}"
 if [ -f "$PROJECT_PATH/qresos-backend.service" ]; then
+    # Создаем временную копию service файла с правильными путями
+    cp "$PROJECT_PATH/qresos-backend.service" "/tmp/qresos-backend.service.tmp"
     # Обновление путей в service файле
-    sed -i "s|/var/www/qresos4/backend|$PROJECT_PATH|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|User=www-data|User=admin|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|Group=www-data|Group=admin|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|User=qresos|User=admin|g" "$PROJECT_PATH/qresos-backend.service"
-    sed -i "s|Group=qresos|Group=admin|g" "$PROJECT_PATH/qresos-backend.service"
+    sed -i "s|/var/www/qresos4/backend|$PROJECT_PATH|g" "/tmp/qresos-backend.service.tmp"
+    sed -i "s|/home/admin/qresos/backend|$PROJECT_PATH|g" "/tmp/qresos-backend.service.tmp"
+    sed -i "s|User=www-data|User=admin|g" "/tmp/qresos-backend.service.tmp"
+    sed -i "s|Group=www-data|Group=admin|g" "/tmp/qresos-backend.service.tmp"
+    sed -i "s|User=qresos|User=admin|g" "/tmp/qresos-backend.service.tmp"
+    sed -i "s|Group=qresos|Group=admin|g" "/tmp/qresos-backend.service.tmp"
     
-    cp "$PROJECT_PATH/qresos-backend.service" /etc/systemd/system/
+    cp "/tmp/qresos-backend.service.tmp" /etc/systemd/system/qresos-backend.service
+    rm "/tmp/qresos-backend.service.tmp"
     echo -e "${GREEN}✅ Service файл установлен${NC}"
 else
     echo -e "${YELLOW}⚠️  Файл qresos-backend.service не найден, создаем его...${NC}"
-    cat > /etc/systemd/system/qresos-backend.service << 'EOF'
+    cat > /etc/systemd/system/qresos-backend.service << EOF
 [Unit]
 Description=QRes OS 4 Restaurant Management System Backend
 After=network.target
@@ -181,18 +193,17 @@ Wants=network.target
 Type=simple
 User=admin
 Group=admin
-WorkingDirectory=/home/admin/qresos/backend
-Environment=PATH=/home/admin/qresos/backend/venv/bin
-Environment=VIRTUAL_ENV=/home/admin/qresos/backend/venv
+WorkingDirectory=$PROJECT_PATH
+Environment=PATH=$PROJECT_PATH/venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=VIRTUAL_ENV=$PROJECT_PATH/venv
 Environment=NODE_ENV=production
 Environment=DEBUG=false
 Environment=RELOAD=false
-Environment=HOST=192.168.4.1
 Environment=PORT=8000
 Environment=LOG_LEVEL=info
-ExecStartPre=/bin/bash -c 'cd /home/admin/qresos/backend && source venv/bin/activate && python3 -m alembic upgrade head'
-ExecStart=/bin/bash /home/admin/qresos/backend/start.sh
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStartPre=/bin/bash -c 'cd $PROJECT_PATH && if [ -d "venv" ]; then source venv/bin/activate; fi && python3 -m alembic upgrade head'
+ExecStart=/bin/bash $PROJECT_PATH/start.sh
+ExecReload=/bin/kill -HUP \$MAINPID
 KillMode=mixed
 TimeoutStopSec=5
 PrivateTmp=true
@@ -248,6 +259,14 @@ echo -e "   ${YELLOW}sudo qresos-control info${NC}       - информация 
 echo -e "   ${YELLOW}sudo qresos-control migrate${NC}    - применить миграции"
 echo -e "   ${YELLOW}sudo qresos-control create-admin${NC} - создать админа"
 echo ""
-echo -e "${GREEN}🌐 API будет доступен по адресу: ${YELLOW}http://192.168.4.1:8000${NC}"
-echo -e "${GREEN}📚 Документация: ${YELLOW}http://192.168.4.1:8000/docs${NC}"
+echo -e "${GREEN}🌐 API будет доступен по адресу:${NC}"
+if ip addr show | grep -q "192.168.4.1"; then
+    echo -e "   ${YELLOW}http://192.168.4.1:8000${NC}"
+    echo -e "${GREEN}📚 Документация: ${YELLOW}http://192.168.4.1:8000/docs${NC}"
+else
+    echo -e "   ${YELLOW}http://127.0.0.1:8000${NC} (локально)"
+    echo -e "   ${YELLOW}http://[IP-адрес-сервера]:8000${NC} (внешний доступ)"
+    echo -e "${GREEN}📚 Документация: ${YELLOW}http://127.0.0.1:8000/docs${NC}"
+fi
+echo -e "${GREEN}📂 Проект установлен в: ${YELLOW}$PROJECT_PATH${NC}"
 echo ""
