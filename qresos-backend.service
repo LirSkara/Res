@@ -1,7 +1,7 @@
 [Unit]
 Description=QRes OS 4 Restaurant Management System Backend
-After=network.target postgresql.service
-Wants=postgresql.service
+After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
@@ -10,13 +10,13 @@ Group=admin
 WorkingDirectory=/home/admin/qresos/backend
 Environment=PATH=/home/admin/qresos/backend/venv/bin:/usr/local/bin:/usr/bin:/bin
 Environment=VIRTUAL_ENV=/home/admin/qresos/backend/venv
-Environment=NODE_ENV=development
 Environment=DEBUG=true
-Environment=RELOAD=true
+Environment=RELOAD=false
 Environment=PORT=8000
 Environment=LOG_LEVEL=info
+Environment=HOST=192.168.4.1
 ExecStartPre=/bin/bash -c 'cd /home/admin/qresos/backend && if [ -d "venv" ]; then source venv/bin/activate; fi && python3 -m alembic upgrade head'
-ExecStart=/bin/bash /home/admin/qresos/backend/start.sh
+ExecStart=/home/admin/qresos/backend/venv/bin/python -m uvicorn app.main:app --host 192.168.4.1 --port 8000 --log-level info
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
