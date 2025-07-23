@@ -623,7 +623,8 @@ async def delete_dish_variation(
     admin_user: AdminUser
 ):
     """
-    Удалить вариацию блюда (только для администраторов)
+    Удалить вариацию блюда (только для администраторов).
+    Можно удалить любую вариацию, включая последнюю.
     """
     # Проверяем что вариация существует
     variation_query = select(DishVariation).where(
@@ -640,18 +641,7 @@ async def delete_dish_variation(
             detail="Вариация блюда не найдена"
         )
     
-    # Проверяем, что это не единственная вариация
-    count_query = select(func.count(DishVariation.id)).where(DishVariation.dish_id == dish_id)
-    count_result = await db.execute(count_query)
-    total_variations = count_result.scalar()
-    
-    if total_variations <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Нельзя удалить единственную вариацию блюда"
-        )
-    
-    # Если удаляем вариацию по умолчанию, назначаем другую
+    # Если удаляем вариацию по умолчанию, назначаем другую (если есть другие вариации)
     if variation.is_default:
         other_variation_query = select(DishVariation).where(
             DishVariation.dish_id == dish_id,
